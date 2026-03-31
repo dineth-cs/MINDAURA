@@ -375,4 +375,20 @@ router.delete('/delete-account', protect, async (req, res) => {
     }
 });
 
+// Get Current User (Web Auth Validation) Route
+router.get('/me', protect, async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id).select('-password');
+        
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        return res.status(200).json({ user });
+    } catch (error) {
+        console.error("Get /me error:", error);
+        return res.status(500).json({ message: "Server error while fetching user" });
+    }
+});
+
 module.exports = router;
