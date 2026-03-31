@@ -297,4 +297,80 @@ router.put('/update-profile', protect, async (req, res) => {
     }
 });
 
+// Update Email Route
+router.put('/update-email', protect, async (req, res) => {
+    try {
+        const { newEmail } = req.body;
+        if (!newEmail) {
+            return res.status(400).json({ message: "New email is required" });
+        }
+
+        const existingUser = await User.findOne({ email: newEmail });
+        if (existingUser) {
+            return res.status(400).json({ message: "Email is already in use by another account" });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        user.email = newEmail;
+        await user.save();
+
+        return res.status(200).json({ message: "Email updated successfully. Please log in again." });
+    } catch (error) {
+        console.error("Update email error:", error);
+        return res.status(500).json({ message: "Server error while updating email" });
+    }
+});
+
+// Update Password Route
+router.put('/update-password', protect, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: "Current and new passwords are required" });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Verify current password
+        const isMatch = await bcryptjs.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Incorrect current password" });
+        }
+
+        // Hash and save new password
+        const salt = await bcryptjs.genSalt(10);
+        user.password = await bcryptjs.hash(newPassword, salt);
+        await user.save();
+
+        return res.status(200).json({ message: "Password updated successfully" });
+    } catch (error) {
+        console.error("Update password error:", error);
+        return res.status(500).json({ message: "Server error while updating password" });
+    }
+});
+
+// Delete Account Route
+router.delete('/delete-account', protect, async (req, res) => {
+    try {
+        const user = await User.findByIdAndDelete(req.user._id);
+        
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        return res.status(200).json({ message: "Account deleted successfully" });
+    } catch (error) {
+        console.error("Delete account error:", error);
+        return res.status(500).json({ message: "Server error while deleting account" });
+    }
+});
+
 module.exports = router;
