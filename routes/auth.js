@@ -5,6 +5,13 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const { protect } = require('../middleware/authMiddleware');
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({ 
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+  api_key: process.env.CLOUDINARY_API_KEY, 
+  api_secret: process.env.CLOUDINARY_API_SECRET 
+});
 
 router.post('/register', async (req, res) => {
     try {
@@ -72,6 +79,8 @@ router.post('/login', async (req, res) => {
             name: user.name,
             email: user.email,
             profilePicture: user.profilePicture,
+            dateOfBirth: user.dateOfBirth,
+            age: user.age,
             token
         });
     } catch (err) {
@@ -203,6 +212,8 @@ router.get('/profile', async (req, res) => {
                 name: user.name,
                 email: user.email,
                 profilePicture: user.profilePicture,
+                dateOfBirth: user.dateOfBirth,
+                age: user.age,
             });
         } catch (error) {
             console.error(error);
@@ -219,31 +230,70 @@ router.get('/profile', async (req, res) => {
 router.put('/update-profile-picture', protect, async (req, res) => {
     try {
         // 1. Verify the JWT token to get the user ID (Handled by 'protect' middleware)
-        // 2. Find the user
-        const user = await User.findById(req.user._id);
+        if (!req.body.profilePicture) {
+            return res.status(400).json({ message: "Profile picture is required" });
+        }
+
+        let secureUrl = req.body.profilePicture;
+        
+        // Check if it's a new upload (base64 string will be large, usually matching data:image or just very long)
+        // Only upload to Cloudinary if it looks like a new base64 string
+        if (secureUrl.startsWith('data:image') || secureUrl.length > 500) {
+            const uploadResponse = await cloudinary.uploader.upload(secureUrl, {
+                folder: 'mindaura_profiles'
+            });
+            secureUrl = uploadResponse.secure_url;
+        }
+
+        // 2 & 3 & 4. Find the user and explicitly update the profile picture field
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { profilePicture: secureUrl },
+            { new: true, runValidators: true }
+        ).select('-password');
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        if (!req.body.profilePicture) {
-            return res.status(400).json({ message: "Profile picture is required" });
-        }
-
-        // 3. Explicitly update the field
-        user.profilePicture = req.body.profilePicture;
-
-        // 4. Save to the database
-        await user.save();
-
         // 5. Add a console.log BEFORE sending the response
-        console.log("Image successfully saved to MongoDB!");
+        console.log("Image successfully saved to MongoDB with findByIdAndUpdate!");
 
         // 6. Return the updated user object
         return res.status(200).json(user);
     } catch (error) {
         console.error("Profile picture update error:", error);
         return res.status(500).json({ message: "Server error while updating profile picture" });
+    }
+});
+
+// Update User Profile Details Route
+router.put('/update-profile', protect, async (req, res) => {
+    try {
+        const { name, dateOfBirth, age } = req.body;
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        user.name = name || user.name;
+        user.dateOfBirth = dateOfBirth || user.dateOfBirth;
+        user.age = age || user.age;
+
+        await user.save();
+
+        return res.status(200).json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            profilePicture: user.profilePicture,
+            dateOfBirth: user.dateOfBirth,
+            age: user.age,
+        });
+    } catch (error) {
+        console.error("Profile update error:", error);
+        return res.status(500).json({ message: "Server error while updating profile details" });
     }
 });
 

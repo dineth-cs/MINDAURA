@@ -25,6 +25,12 @@ const UserSchema = new mongoose.Schema(
             type: String,
             default: "", // Default is an empty string if no picture is provided
         },
+        dateOfBirth: {
+            type: Date,
+        },
+        age: {
+            type: String,
+        },
     },
     { timestamps: true }
 );
