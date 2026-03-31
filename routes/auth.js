@@ -310,13 +310,15 @@ router.put('/update-email', protect, async (req, res) => {
             return res.status(400).json({ message: "Email is already in use by another account" });
         }
 
-        const user = await User.findById(req.user._id);
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { email: newEmail },
+            { new: true, runValidators: true }
+        );
+
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-
-        user.email = newEmail;
-        await user.save();
 
         return res.status(200).json({ message: "Email updated successfully. Please log in again." });
     } catch (error) {
