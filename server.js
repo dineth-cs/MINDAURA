@@ -37,3 +37,9 @@ app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
 const support = require('./routes/support');
 app.use('/api/support', support);
+
+// මේක උඩින්ම හරි, අනිත් require තියෙන තැනින් හරි දාන්න
+const supportRoutes = require('./routes/support');
+
+// මේක අනිත් app.use තියෙන තැනින් දාන්න
+app.use('/api/support', supportRoutes);
