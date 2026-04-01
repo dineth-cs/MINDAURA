@@ -25,6 +25,10 @@ const UserSchema = new mongoose.Schema(
             type: String,
             default: "", // Default is an empty string if no picture is provided
         },
+        isAdmin: {
+            type: Boolean,
+            default: false,
+        },
         dateOfBirth: {
             type: Date,
         },

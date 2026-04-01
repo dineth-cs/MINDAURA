@@ -69,7 +69,7 @@ router.post('/login', async (req, res) => {
 
         // Create JWT token
         const token = jwt.sign(
-            { userId: user._id },
+            { userId: user._id, isAdmin: user.isAdmin },
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
         );
@@ -81,6 +81,48 @@ router.post('/login', async (req, res) => {
             profilePicture: user.profilePicture,
             dateOfBirth: user.dateOfBirth,
             age: user.age,
+            isAdmin: user.isAdmin,
+            token
+        });
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin ONLY Login Route
+router.post('/admin/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Check if user exists
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ message: "Invalid Credentials" });
+        }
+
+        // Strongly enforce Admins
+        if (!user.isAdmin) {
+            return res.status(403).json({ message: "Access denied. Admins only." });
+        }
+
+        // Compare password
+        const isMatch = await bcryptjs.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Invalid Credentials" });
+        }
+
+        // Create JWT token
+        const token = jwt.sign(
+            { userId: user._id, isAdmin: user.isAdmin },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        res.status(200).json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            isAdmin: user.isAdmin,
             token
         });
     } catch (err) {
@@ -384,7 +426,17 @@ router.get('/me', protect, async (req, res) => {
             return res.status(404).json({ message: "User not found" });
         }
 
-        return res.status(200).json({ user });
+        return res.status(200).json({ 
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                profilePicture: user.profilePicture,
+                dateOfBirth: user.dateOfBirth,
+                age: user.age,
+                isAdmin: user.isAdmin
+            }
+        });
     } catch (error) {
         console.error("Get /me error:", error);
         return res.status(500).json({ message: "Server error while fetching user" });
