@@ -15,7 +15,10 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const authRoutes = require('./routes/auth');
+const supportRoutes = require('./routes/support');
+
 app.use('/api/auth', authRoutes);
+app.use('/api/support', supportRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -30,3 +33,7 @@ app.get('/', (req, res) => {
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+
+
+const support = require('./routes/support');
+app.use('/api/support', support);
