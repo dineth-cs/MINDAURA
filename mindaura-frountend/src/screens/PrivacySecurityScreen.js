@@ -18,6 +18,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
+import { API_URL } from '../config/api';
 
 export default function PrivacySecurityScreen() {
     const navigation = useNavigation();
@@ -102,7 +103,7 @@ export default function PrivacySecurityScreen() {
                         setIsClearing(true);
                         try {
                             const token = await AsyncStorage.getItem('userToken');
-                            await axios.delete('https://mindaura-wfut.onrender.com/api/users/clear-data', {
+                            await axios.delete(`${API_URL}/api/auth/clear-data`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
                             

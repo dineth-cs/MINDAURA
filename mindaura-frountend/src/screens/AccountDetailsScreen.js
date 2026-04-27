@@ -17,6 +17,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
+import { API_URL } from '../config/api';
 
 const AccountDetailsScreen = ({ navigation }) => {
     const { email, updateUserContext, isDarkMode } = useContext(UserContext); 
@@ -60,7 +61,7 @@ const AccountDetailsScreen = ({ navigation }) => {
         setIsUpdatingEmail(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
-            const response = await axios.put('https://mindaura-wfut.onrender.com/api/auth/update-email', 
+            const response = await axios.put(`${API_URL}/api/auth/update-email`, 
                 { newEmail },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -90,7 +91,7 @@ const AccountDetailsScreen = ({ navigation }) => {
         setIsUpdatingPassword(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
-            const response = await axios.put('https://mindaura-wfut.onrender.com/api/auth/update-password', 
+            const response = await axios.put(`${API_URL}/api/auth/update-password`, 
                 { currentPassword, newPassword },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -122,7 +123,7 @@ const AccountDetailsScreen = ({ navigation }) => {
                         setIsDeleting(true);
                         try {
                             const token = await AsyncStorage.getItem('userToken');
-                            await axios.delete('https://mindaura-wfut.onrender.com/api/auth/delete-account', {
+                            await axios.delete(`${API_URL}/api/auth/delete-account`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
                             Alert.alert("Deleted", "Your account has been permanently removed.");

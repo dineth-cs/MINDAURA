@@ -21,53 +21,57 @@ const AppContent = () => {
   const { currentTheme, isDarkMode } = useContext(UserContext);
   const { isLoading, userToken } = useContext(AuthContext);
   const appState = useRef(AppState.currentState);
-  const isAuthenticating = useRef(false);
+  const isAuthenticated = useRef(false);
 
-  useEffect(() => {
-    const handleBiometricAuth = async () => {
-      // Prevent multiple prompts if one is already active
-      if (isAuthenticating.current) return;
+  const handleBiometricAuth = async () => {
+    // If already authenticated in this "session" (since last background), skip
+    if (isAuthenticated.current) return;
 
-      const isLockEnabled = await AsyncStorage.getItem('isAppLockEnabled');
-      if (isLockEnabled === 'true' && userToken) {
-        const hasHardware = await LocalAuthentication.hasHardwareAsync();
-        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    const isLockEnabled = await AsyncStorage.getItem('isAppLockEnabled');
+    if (isLockEnabled === 'true' && userToken) {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-        if (hasHardware && isEnrolled) {
-          isAuthenticating.current = true;
-          try {
-            const result = await LocalAuthentication.authenticateAsync({
-              promptMessage: 'Unlock MindAura',
-              fallbackLabel: 'Use Passcode',
-              disableDeviceFallback: false,
-            });
+      if (hasHardware && isEnrolled) {
+        try {
+          const result = await LocalAuthentication.authenticateAsync({
+            promptMessage: 'Unlock MindAura',
+            fallbackLabel: 'Use Passcode',
+            disableDeviceFallback: false,
+          });
 
-            if (!result.success) {
-              Alert.alert('Locked', 'Authentication required to access MindAura.');
-              // Reset flag so they can retry
-              isAuthenticating.current = false;
-              handleBiometricAuth(); 
-            }
-          } catch (error) {
-            console.error("Biometric auth error:", error);
-          } finally {
-            isAuthenticating.current = false;
+          if (result.success) {
+            isAuthenticated.current = true;
+          } else {
+            Alert.alert('Locked', 'Authentication required to access MindAura.');
+            handleBiometricAuth(); // Retry
           }
+        } catch (error) {
+          console.error("Biometric auth error:", error);
         }
       }
-    };
+    } else {
+      // If lock is not enabled or user not logged in, consider them "authenticated"
+      isAuthenticated.current = true;
+    }
+  };
 
-    // Run on initial load
+  useEffect(() => {
+    // Initial check on mount
     handleBiometricAuth();
 
-    // Run on app state changes
     const subscription = AppState.addEventListener('change', nextAppState => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextAppState === 'active'
-      ) {
+      // Reset authentication status ONLY when the app is sent to the background/minimized
+      // This ignores the 'inactive' state triggered by the biometric modal itself on iOS
+      if (nextAppState === 'background') {
+        isAuthenticated.current = false;
+      }
+
+      // Trigger authentication when returning to active state IF not already authenticated
+      if (nextAppState === 'active') {
         handleBiometricAuth();
       }
+      
       appState.current = nextAppState;
     });
 
