@@ -13,14 +13,16 @@ import {
     ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
 import { API_URL } from '../config/api';
 
-const AccountDetailsScreen = ({ navigation }) => {
-    const { email, updateUserContext, isDarkMode } = useContext(UserContext); 
+const AccountDetailsScreen = () => {
+    const navigation = useNavigation();
+    const { email, updateUserContext, clearUserContext, isDarkMode } = useContext(UserContext); 
     const { signOut } = useContext(AuthContext);
 
     const [newEmail, setNewEmail] = useState('');
@@ -45,11 +47,26 @@ const AccountDetailsScreen = ({ navigation }) => {
     const eyeIconColor = isDarkMode ? '#BBBBBB' : '#999999';
 
     const handleLogout = async () => {
+        console.log("AccountDetails: Logout triggered.");
         try {
-            await AsyncStorage.removeItem('userToken');
-            signOut();
+            if (typeof clearUserContext === 'function') {
+                console.log("AccountDetails: Calling clearUserContext...");
+                await clearUserContext();
+            }
+            if (typeof signOut === 'function') {
+                console.log("AccountDetails: Calling signOut...");
+                await signOut();
+            }
+
+            // Forced Navigation Reset (as requested)
+            navigation.dispatch(
+                CommonActions.reset({
+                    index: 0,
+                    routes: [{ name: 'Login' }],
+                })
+            );
         } catch (error) {
-            console.error('Logout error:', error);
+            console.error('AccountDetails: Logout error:', error);
         }
     };
 

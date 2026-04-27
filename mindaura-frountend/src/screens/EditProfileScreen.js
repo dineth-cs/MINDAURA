@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
     StyleSheet,
     Text,
@@ -34,6 +34,43 @@ export default function EditProfileScreen() {
 
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoadingData, setIsLoadingData] = useState(true);
+
+    // Fetch fresh profile data on mount
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const token = await AsyncStorage.getItem('userToken');
+                if (!token) return;
+
+                const response = await axios.get('https://mindaura-wfut.onrender.com/api/auth/profile', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (response.data) {
+                    const freshData = response.data;
+                    setLocalName(freshData.name || '');
+                    setLocalPic(freshData.profilePicture || null);
+                    setLocalDob(freshData.dateOfBirth ? new Date(freshData.dateOfBirth) : null);
+                    setLocalAge(freshData.age || '');
+
+                    // Sync back to context as well
+                    updateUserContext({
+                        name: freshData.name,
+                        profilePic: freshData.profilePicture,
+                        dob: freshData.dateOfBirth,
+                        age: freshData.age
+                    });
+                }
+            } catch (error) {
+                console.error("Fetch profile error in EditProfileScreen:", error);
+            } finally {
+                setIsLoadingData(false);
+            }
+        };
+
+        fetchProfile();
+    }, []);
 
     const bgColor = isDarkMode ? '#121212' : '#FFFFFF';
     const textColor = isDarkMode ? '#FFFFFF' : '#111827';
@@ -157,8 +194,14 @@ export default function EditProfileScreen() {
                 </View>
 
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-
-                    {/* Profile Picture Section */}
+                    {isLoadingData ? (
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 }}>
+                            <ActivityIndicator size="large" color="#6B8EFE" />
+                            <Text style={{ color: subTextColor, marginTop: 10 }}>Fetching fresh profile...</Text>
+                        </View>
+                    ) : (
+                        <>
+                            {/* Profile Picture Section */}
                     <View style={styles.avatarSection}>
                         <View style={styles.avatarContainer}>
                             {localPic ? (
@@ -279,8 +322,9 @@ export default function EditProfileScreen() {
                             )}
                         </TouchableOpacity>
                     </View>
-
-                </ScrollView>
+                </>
+            )}
+        </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );

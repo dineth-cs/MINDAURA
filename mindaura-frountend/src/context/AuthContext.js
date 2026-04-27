@@ -140,14 +140,18 @@ export const AuthProvider = ({ children }) => {
                 setIsLoading(false);
             },
             signOut: async () => {
-                setIsLoading(true);
+                console.log("AuthContext: Starting signOut process...");
                 try {
                     await AsyncStorage.removeItem('userToken');
+                    console.log("AuthContext: userToken removed from storage.");
+                } catch (e) { 
+                    console.error('AuthContext: Error removing token during logout:', e); 
+                } finally {
+                    console.log("AuthContext: Updating state (userToken: null)...");
                     setUserToken(null);
                     setUserId(null);
                     setIsSuspended(false);
-                } catch (e) { console.error(e); }
-                setIsLoading(false);
+                }
             },
             userToken,
             userId,

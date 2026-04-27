@@ -20,6 +20,9 @@ import { AuthProvider, AuthContext } from './src/context/AuthContext';
 const AppContent = () => {
   const { currentTheme, isDarkMode } = useContext(UserContext);
   const { isLoading, userToken } = useContext(AuthContext);
+  
+  console.log("AppContent: userToken:", userToken ? "EXISTS" : "NULL", "isLoading:", isLoading);
+
   const appState = useRef(AppState.currentState);
   const isAuthenticated = useRef(false);
 

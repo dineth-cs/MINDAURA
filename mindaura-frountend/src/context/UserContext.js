@@ -137,9 +137,22 @@ export const UserProvider = ({ children }) => {
         if (updates.age !== undefined) setAge(updates.age);
     };
 
+    const clearUserContext = async () => {
+        setName('');
+        setEmail('');
+        setProfilePic(null);
+        setDob(null);
+        setAge('');
+        try {
+            await AsyncStorage.removeItem('profilePic');
+        } catch (e) {
+            console.error("Failed to clear profilePic from storage", e);
+        }
+    };
+
     return (
         <UserContext.Provider value={{
-            name, email, profilePic, dob, age, updateUserContext,
+            name, email, profilePic, dob, age, updateUserContext, clearUserContext,
             isDarkMode, setIsDarkMode, currentTheme
         }}>
             {children}

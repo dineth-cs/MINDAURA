@@ -57,6 +57,8 @@ function AuthenticatedApp() {
 export default function AppNavigator() {
     const { userToken, isSuspended } = useContext(AuthContext);
 
+    console.log("AppNavigator: Rendering. userToken:", userToken ? "EXISTS" : "NULL", "isSuspended:", isSuspended);
+
     useEffect(() => {
         const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
             const screen = response.notification.request.content.data?.screen || 'HelpSupportScreen';
@@ -68,7 +70,10 @@ export default function AppNavigator() {
     }, []);
 
     return (
-        <NavigationContainer ref={navigationRef}>
+        <NavigationContainer 
+            ref={navigationRef}
+            key={userToken ? 'authenticated' : 'unauthenticated'}
+        >
             {/* 1. If suspended, completely block app access and show SuspendedScreen */}
             {isSuspended ? (
                 <Stack.Navigator screenOptions={{ headerShown: false }}>
