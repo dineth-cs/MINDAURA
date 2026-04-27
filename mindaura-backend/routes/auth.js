@@ -6,6 +6,7 @@ const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const MoodEntry = require('../models/MoodEntry');
 const SupportTicket = require('../models/SupportTicket');
+const Journal = require('../models/Journal');
 const { protect } = require('../middleware/authMiddleware');
 const cloudinary = require('cloudinary').v2;
 
@@ -463,6 +464,25 @@ router.delete('/delete-account', protect, async (req, res) => {
     } catch (error) {
         console.error("Delete account error:", error);
         return res.status(500).json({ message: "Server error while deleting account" });
+    }
+});
+
+// Clear Data Route
+router.delete('/clear-data', protect, async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // Strictly delete only associated data, not the user account
+        await Promise.all([
+            MoodEntry.deleteMany({ user: userId }),
+            Journal.deleteMany({ user: userId }),
+            SupportTicket.deleteMany({ user: userId }),
+        ]);
+
+        res.status(200).json({ message: "All your personal data has been cleared successfully." });
+    } catch (error) {
+        console.error("Clear data error:", error);
+        res.status(500).json({ message: "Server error while clearing data." });
     }
 });
 

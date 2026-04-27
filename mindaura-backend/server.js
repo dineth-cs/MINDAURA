@@ -39,7 +39,6 @@ const supportRoutes = require('./routes/support');
 const adminRoutes = require('./routes/admin');
 const emotionRoutes = require('./routes/emotion');
 const journalRoutes = require('./routes/journal');
-const userRoutes = require('./routes/user');
 const auditMiddleware = require('./middleware/auditMiddleware');
 
 // Mount routes
@@ -48,7 +47,6 @@ app.use('/api/support', auditMiddleware, supportRoutes);
 app.use('/api/admin', auditMiddleware, adminRoutes);
 app.use('/api/emotion', emotionRoutes);
 app.use('/api/journal', journalRoutes);
-app.use('/api/users', userRoutes);
 
 // Socket.io Listener Logic
 io.on('connection', (socket) => {
