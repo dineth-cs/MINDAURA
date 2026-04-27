@@ -1,7 +1,7 @@
-// For production: https://mindaura-wfut.onrender.com
+// ✅ Production backend (Render)
 // For local development (Android Emulator): http://10.0.2.2:5000
 // For local development (iOS Simulator): http://localhost:5000
-export const API_URL = 'http://localhost:5000'; 
+export const API_URL = 'https://mindaura-wfut.onrender.com';
 
 export const API_ENDPOINTS = {
     AUTH: {

@@ -230,6 +230,7 @@ export default function CalendarScreen() {
                     ) : (
                         <>
                             <Calendar
+                                key={isDarkMode ? 'dark' : 'light'}
                                 markingType={'dot'}
                                 current={today}
                                 onDayPress={(day) => setSelectedDate(day.dateString)}
@@ -244,16 +245,26 @@ export default function CalendarScreen() {
                                     },
                                 }}
                                 theme={{
-                                    calendarBackground: currentTheme.card,
-                                    dayTextColor: currentTheme.text,
-                                    monthTextColor: currentTheme.text,
-                                    arrowColor: '#6B8EFE',
-                                    textDisabledColor: currentTheme.subText,
+                                    // Background
+                                    backgroundColor: isDarkMode ? '#252536' : '#F8F9FA',
+                                    calendarBackground: isDarkMode ? '#252536' : '#F8F9FA',
+                                    // Month title (e.g. "April 2026")
+                                    monthTextColor: isDarkMode ? '#FFFFFF' : '#1A1A2E',
+                                    // Day number text
+                                    dayTextColor: isDarkMode ? '#E2E8F0' : '#1A1A2E',
+                                    // Day header row (S M T W T F S)
+                                    textSectionTitleColor: isDarkMode ? '#A0A0B0' : '#888888',
+                                    // Greyed-out days from prev/next month
+                                    textDisabledColor: isDarkMode ? '#4A4A6A' : '#C0C0C0',
+                                    // Arrows
+                                    arrowColor: isDarkMode ? '#6B8EFE' : '#6B8EFE',
+                                    // Dots
+                                    dotColor: '#6B8EFE',
+                                    selectedDotColor: '#FFFFFF',
+                                    // Typography weights
                                     textDayFontWeight: '500',
                                     textMonthFontWeight: 'bold',
                                     textDayHeaderFontWeight: '600',
-                                    dotColor: '#6B8EFE',
-                                    selectedDotColor: '#FFFFFF',
                                 }}
                             />
 
