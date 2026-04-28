@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const chatController = require('../controllers/chatController');
-const auth = require('../middleware/authMiddleware'); // Fixed path to match actual filename
+const chatController = require('../controllers/chatController'); 
 
-router.post('/', auth, chatController.handleChat);
+
+router.post('/', chatController.handleChat);
 
 module.exports = router;
