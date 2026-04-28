@@ -17,8 +17,8 @@ router.post('/save', protect, async (req, res) => {
                 const cleanBase64 = image.replace(/^data:image\/\w+;base64,/, "");
                 const buffer = Buffer.from(cleanBase64, 'base64');
 
-                // 2. Isolated fetch — NO proxy headers, exact HF gateway spec
-                const response = await fetch("https://api-inference.huggingface.co/models/dima806/facial_emotions_image_detection", {
+                // 2. Use the new HF Router endpoint (legacy api-inference URL is deprecated)
+                const response = await fetch("https://router.huggingface.co/hf-inference/models/dima806/facial_emotions_image_detection", {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
@@ -30,7 +30,7 @@ router.post('/save', protect, async (req, res) => {
 
                 if (!response.ok) {
                     const errText = await response.text();
-                    throw new Error(`HF_API_ERROR ${response.status}: ${errText}`);
+                    throw new Error(`HF_ROUTER_ERROR ${response.status}: ${errText}`);
                 }
 
                 const results = await response.json();
