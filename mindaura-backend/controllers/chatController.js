@@ -1,7 +1,8 @@
 const axios = require('axios');
 
 exports.handleChat = async (req, res) => {
-    const { message, history } = req.body;
+    const { message } = req.body;
+    const history = req.body.history || []; // Default to empty array if missing
     const apiKey = process.env.GEMINI_API_KEY;
 
     // 1. Strict validation: Check if message is empty or undefined
