@@ -1,76 +1,57 @@
-const axios = require('axios');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 exports.handleChat = async (req, res) => {
     const { message } = req.body;
-    const history = req.body.history || []; // Default to empty array if missing
+    const history = req.body.history || [];
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // 1. Strict validation: Check if message is empty or undefined
+    // 1. Validation
     if (!message || message.trim() === '') {
-        return res.status(400).json({ error: 'BAD_REQUEST', details: 'Message is required and cannot be empty.' });
+        return res.status(400).json({ error: 'BAD_REQUEST', details: 'Message is required.' });
     }
 
     if (!apiKey) {
         console.error("Critical Error: GEMINI_API_KEY is missing in .env");
-        return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server.' });
+        return res.status(500).json({ error: 'SERVER_CONFIG_ERROR', details: 'Gemini API Key not configured.' });
     }
 
-    // 2. Debugging logs: See exact payload in Render logs
-    console.log("Received message from frontend:", JSON.stringify(req.body, null, 2));
-
     try {
-        // Multi-model routing logic
-        let model = 'gemini-1.5-flash'; // Default: Fast and efficient
-        
-        const complexKeywords = ['deep summary', 'historical insight', 'analyze my month', 'long-term trends'];
-        const isComplex = complexKeywords.some(kw => message.toLowerCase().includes(kw));
-        
-        if (isComplex) {
-            model = 'gemini-1.5-pro'; // Complex/Long-term analysis
-        }
+        // 2. Initialize Gemini SDK
+        const genAI = new GoogleGenerativeAI(apiKey);
 
-        // 3. Verify API Config: Using formal system_instruction for Aura's personality
-        const systemInstruction = `You are Aura, an empathetic wellness assistant for the MindAura app. 
-        Your mission is to support users in their mental health journey with warmth, validation, and actionable wellness tips. 
-        Align your personality with MindAura's mission of providing a safe, mindful, and restorative space. 
-        Be concise but deeply supportive. If a user is in crisis, gently encourage them to seek professional help.`;
+        // 3. Configure the model with system instructions
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash",
+            systemInstruction: `You are Aura, an empathetic wellness assistant for the MindAura app. 
+            Your mission is to support users in their mental health journey with warmth, validation, and actionable wellness tips. 
+            Align your personality with MindAura's mission of providing a safe, mindful, and restorative space. 
+            Be concise but deeply supportive. If a user is in crisis, gently encourage them to seek professional help.`
+        });
 
-        const response = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-                system_instruction: {
-                    parts: [{ text: systemInstruction }]
-                },
-                contents: [
-                    ...history, // Previous conversation context
-                    { role: 'user', parts: [{ text: message }] }
-                ],
-                generationConfig: {
-                    temperature: 0.7,
-                    topK: 40,
-                    topP: 0.95,
-                    maxOutputTokens: 1024,
-                }
-            }
-        );
+        // 4. Start Chat with history
+        const chat = model.startChat({
+            history: history,
+            generationConfig: {
+                maxOutputTokens: 1000,
+            },
+        });
 
-        if (!response.data.candidates || response.data.candidates.length === 0) {
-            throw new Error('GEMINI_EMPTY_RESPONSE: Model returned no candidates.');
-        }
+        // 5. Send message and get response
+        const result = await chat.sendMessage(message);
+        const response = await result.response;
+        const text = response.text();
 
-        const reply = response.data.candidates[0].content.parts[0].text;
-        res.json({ reply, modelUsed: model });
+        // 6. Return response to frontend
+        res.json({ reply: text });
 
     } catch (error) {
-        // 4. Better Error Logging: Log full stack trace
-        console.error("Gemini API Error details:", error);
+        console.error("Gemini SDK Error:", error);
         
-        const status = error.response ? error.response.status : 500;
-        const errorData = error.response ? error.response.data : { message: error.message };
-        
+        // Handle specific API errors
+        const status = error.status || 500;
         res.status(status).json({ 
             error: 'AI_CHAT_ERROR', 
-            details: errorData 
+            details: error.message || 'An unexpected error occurred during chat.'
         });
     }
 };
