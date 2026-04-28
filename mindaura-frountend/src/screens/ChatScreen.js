@@ -64,7 +64,7 @@ export default function ChatScreen() {
 
             const auraResponse = {
                 _id: Math.random().toString(),
-                text: response.data.reply,
+                text: response.data.response || response.data.reply || "I'm here to listen.",
                 createdAt: new Date(),
                 user: { _id: 2, name: 'Aura' },
             };
