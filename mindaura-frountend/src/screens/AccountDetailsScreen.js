@@ -13,7 +13,7 @@ import {
     ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserContext } from '../context/UserContext';
@@ -50,21 +50,13 @@ const AccountDetailsScreen = () => {
         console.log("AccountDetails: Logout triggered.");
         try {
             if (typeof clearUserContext === 'function') {
-                console.log("AccountDetails: Calling clearUserContext...");
                 await clearUserContext();
             }
             if (typeof signOut === 'function') {
-                console.log("AccountDetails: Calling signOut...");
                 await signOut();
             }
-
-            // Forced Navigation Reset (as requested)
-            navigation.dispatch(
-                CommonActions.reset({
-                    index: 0,
-                    routes: [{ name: 'Login' }],
-                })
-            );
+            // Navigation is handled automatically by AppNavigator
+            // watching userToken state — no manual reset needed.
         } catch (error) {
             console.error('AccountDetails: Logout error:', error);
         }

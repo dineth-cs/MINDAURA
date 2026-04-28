@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
@@ -106,29 +106,16 @@ export default function ProfileScreen() {
         console.log("ProfileScreen: Logout button pressed.");
         try {
             if (typeof clearUserContext === 'function') {
-                console.log("ProfileScreen: Calling clearUserContext...");
                 await clearUserContext();
-            } else {
-                console.warn("ProfileScreen: clearUserContext is not a function!");
             }
-            
             if (typeof signOut === 'function') {
-                console.log("ProfileScreen: Calling signOut...");
                 await signOut();
-            } else {
-                console.warn("ProfileScreen: signOut is not a function!");
             }
-
-            // Forced Navigation Reset (as requested)
-            navigation.dispatch(
-                CommonActions.reset({
-                    index: 0,
-                    routes: [{ name: 'Login' }],
-                })
-            );
+            // Navigation is handled automatically by AppNavigator
+            // watching userToken state — no manual reset needed.
         } catch (error) {
             console.error('ProfileScreen: Logout sequence failed:', error);
-            Alert.alert("Logout Error", "Something went wrong while logging out. Please check your connection and try again.");
+            Alert.alert("Logout Error", "Something went wrong while logging out.");
         }
     };
 

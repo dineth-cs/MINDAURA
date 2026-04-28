@@ -1,4 +1,4 @@
-import React, { useContext, useState, useRef, useEffect } from 'react';
+import React, { useContext, useState, useRef, useEffect, useCallback } from 'react';
 import {
     StyleSheet,
     Text,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Camera } from 'expo-camera';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,6 +44,53 @@ export default function HomeScreen() {
     const [permissionType, setPermissionType] = useState(''); // 'camera' or 'microphone'
     const [weeklyCount, setWeeklyCount] = useState(0);
     const [monthlyCount, setMonthlyCount] = useState(0);
+
+    // --- Gamification & AI Lifestyle Assistant ---
+    const [streakCount, setStreakCount] = useState(0);
+    const lastCheckIn = { time: '4 hours ago', mood: 'Happy', emoji: '😊' };
+    const quoteOfTheDay = "Every day is a fresh start. Take a deep breath and begin. 🌱";
+
+    const DEFAULT_TASKS = [
+        { id: 'default-1', title: '💧 Drink 2 liters of water', completed: false },
+        { id: 'default-2', title: '🧘‍♂️ 5-minute deep breathing', completed: false },
+        { id: 'default-3', title: '📓 Log today\'s mood', completed: false },
+        { id: 'default-4', title: '🚶‍♂️ Take a 10-minute walk outside', completed: false },
+    ];
+
+    // ── Streak: load from AsyncStorage whenever the screen is focused ──
+    const loadStreakFromStorage = useCallback(async () => {
+        try {
+            const stored = await AsyncStorage.getItem('streakCount');
+            if (stored !== null) setStreakCount(parseInt(stored, 10));
+        } catch (e) {
+            console.warn('Could not load streak:', e);
+        }
+    }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadStreakFromStorage();
+        }, [loadStreakFromStorage])
+    );
+
+    // ── Midnight Task Reset ──
+    const checkAndResetTasksAtMidnight = async (currentTasks) => {
+        try {
+            const todayStr = new Date().toDateString(); // e.g. "Mon Apr 28 2026"
+            const lastTaskDate = await AsyncStorage.getItem('lastTaskDate');
+
+            if (lastTaskDate !== todayStr) {
+                // It's a new day — reset all task completion flags
+                const resetTasks = currentTasks.map(t => ({ ...t, completed: false }));
+                setTasks(resetTasks);
+                await AsyncStorage.setItem('lastTaskDate', todayStr);
+                await syncTasksToBackend(resetTasks);
+                console.log('HomeScreen: Midnight reset applied for', todayStr);
+            }
+        } catch (e) {
+            console.warn('Could not perform midnight reset:', e);
+        }
+    };
 
     const handleScanFace = async () => {
         const { status } = await Camera.requestCameraPermissionsAsync();
@@ -127,9 +174,12 @@ export default function HomeScreen() {
                         profilePic: response.data.profilePicture
                     });
 
-                    if (response.data.dailyTasks) {
-                        setTasks(response.data.dailyTasks);
-                    }
+                    // Load tasks, then immediately check if midnight reset is needed
+                    const loadedTasks = (response.data.dailyTasks && response.data.dailyTasks.length > 0)
+                        ? response.data.dailyTasks
+                        : DEFAULT_TASKS;
+                    setTasks(loadedTasks);
+                    await checkAndResetTasksAtMidnight(loadedTasks);
 
                     // Populate weekly/monthly stats from backend profile
                     if (response.data.weeklyTasksCompleted !== undefined) {
@@ -225,8 +275,21 @@ export default function HomeScreen() {
 
                 {/* Greeting Section */}
                 <View style={styles.greetingContainer}>
-                    <Text style={[styles.greetingTitle, { color: currentTheme.text }]}>Welcome back, {userData?.name || name} ✨</Text>
+                    <Text style={[styles.greetingTitle, { color: currentTheme.text }]}>
+                        Welcome, {(userData?.name || name || '').split(' ')[0]} ✨
+                    </Text>
                     <Text style={[styles.greetingSubtitle, { color: currentTheme.subText }]}>How are you feeling today?</Text>
+
+                    {/* Streak Badge */}
+                    <View style={[styles.streakBadge, { backgroundColor: isDarkMode ? 'rgba(245,124,0,0.15)' : '#FFF3E0' }]}>
+                        <Text style={styles.streakText}>🔥 {streakCount} Day Streak</Text>
+                    </View>
+
+                    {/* Quote of the Day */}
+                    <View style={[styles.quoteBox, { backgroundColor: isDarkMode ? 'rgba(107,142,254,0.1)' : '#F5F0FF' }]}>
+                        <Ionicons name="sparkles" size={14} color="#6B8EFE" style={{ marginBottom: 4 }} />
+                        <Text style={[styles.quoteText, { color: isDarkMode ? '#C4B5FD' : '#5B4FCF' }]}>{quoteOfTheDay}</Text>
+                    </View>
                 </View>
 
                 {/* Action Cards Grid */}
@@ -340,6 +403,10 @@ export default function HomeScreen() {
 
                 {/* Progress Summary Section */}
                 <View style={styles.sectionContainer}>
+                    {/* Last Check-in Indicator */}
+                    <Text style={[styles.lastCheckIn, { color: currentTheme.subText }]}>
+                        ⏱️ Last check-in: {lastCheckIn.time} ({lastCheckIn.mood} {lastCheckIn.emoji})
+                    </Text>
                     <Text style={[styles.sectionTitle, { color: currentTheme.text }]}>Your Progress Summary</Text>
                     <View style={styles.progressSummaryRow}>
                         <View style={[styles.summaryBlock, { backgroundColor: summaryGreen }]}>
@@ -464,6 +531,39 @@ const styles = StyleSheet.create({
     greetingSubtitle: {
         fontSize: 16,
         fontWeight: '400',
+        marginBottom: 12,
+    },
+    streakBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        marginTop: 4,
+        marginBottom: 16,
+        alignSelf: 'flex-start',
+    },
+    streakText: {
+        color: '#F57C00',
+        fontWeight: '700',
+        fontSize: 13,
+    },
+    quoteBox: {
+        borderRadius: 14,
+        padding: 14,
+        width: '100%',
+        alignItems: 'flex-start',
+    },
+    quoteText: {
+        fontSize: 13,
+        fontStyle: 'italic',
+        lineHeight: 20,
+        fontWeight: '500',
+    },
+    lastCheckIn: {
+        fontSize: 12,
+        marginBottom: 8,
+        fontStyle: 'italic',
     },
 
     // Cards Grid Styles

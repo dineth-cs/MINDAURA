@@ -52,6 +52,47 @@ export default function FaceScreen() {
         }
     };
 
+    // ── Streak Counter: called after every successful mood log ──
+    const updateStreak = async () => {
+        try {
+            const todayStr = new Date().toDateString();
+            const lastLogDate = await AsyncStorage.getItem('lastMoodLogDate');
+            const storedStreak = await AsyncStorage.getItem('streakCount');
+            let currentStreak = storedStreak ? parseInt(storedStreak, 10) : 0;
+
+            if (lastLogDate === todayStr) {
+                // Already logged today \u2014 no change to streak
+                console.log('Streak: Already logged today. Streak stays at', currentStreak);
+                return;
+            }
+
+            if (lastLogDate) {
+                const lastDate = new Date(lastLogDate);
+                const today = new Date(todayStr);
+                const diffDays = Math.round((today - lastDate) / (1000 * 60 * 60 * 24));
+
+                if (diffDays === 1) {
+                    // Consecutive day \u2014 increment
+                    currentStreak += 1;
+                    console.log('Streak: Consecutive day! New streak =', currentStreak);
+                } else {
+                    // Missed a day \u2014 reset to 1 (today counts as day 1)
+                    currentStreak = 1;
+                    console.log('Streak: Missed a day. Reset to 1.');
+                }
+            } else {
+                // First ever log
+                currentStreak = 1;
+                console.log('Streak: First mood log! Streak starts at 1.');
+            }
+
+            await AsyncStorage.setItem('lastMoodLogDate', todayStr);
+            await AsyncStorage.setItem('streakCount', String(currentStreak));
+        } catch (e) {
+            console.warn('Could not update streak:', e);
+        }
+    };
+
     const handleAnalyzeReady = async () => {
         setIsAnalyzing(true);
         try {
@@ -70,7 +111,11 @@ export default function FaceScreen() {
             );
 
             console.log("Analysis successful:", response.data);
-            navigation.navigate('RecommendationsScreen', { mood: 'Happy' });
+
+            // ── Streak Counter Update ──
+            await updateStreak();
+
+            navigation.navigate('RecommendationsScreen', { mood: response.data.mood || 'Happy' });
 
         } catch (err) {
             if (err.response) {
