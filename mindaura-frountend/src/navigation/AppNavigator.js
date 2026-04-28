@@ -80,7 +80,7 @@ export default function AppNavigator() {
                     <Stack.Screen name="Suspended" component={SuspendedScreen} />
                 </Stack.Navigator>
             ) : (
-                /* 2. Normal Auth flow */
+                /* 2. Main Auth Flow: userToken == null ? AuthStack : AppStack */
                 userToken ? <AuthenticatedApp /> : <AuthStack />
             )}
         </NavigationContainer>

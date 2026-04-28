@@ -111,8 +111,11 @@ export default function ProfileScreen() {
             if (typeof signOut === 'function') {
                 await signOut();
             }
-            // Navigation is handled automatically by AppNavigator
-            // watching userToken state — no manual reset needed.
+            // Explicitly reset the navigation stack to the Login screen
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+            });
         } catch (error) {
             console.error('ProfileScreen: Logout sequence failed:', error);
             Alert.alert("Logout Error", "Something went wrong while logging out.");
