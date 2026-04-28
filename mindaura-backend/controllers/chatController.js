@@ -1,35 +1,55 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// 1. API Key එක හරියටම ගන්නවා
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// 1. Aura ගේ පෞරුෂය (The Professional System Prompt)
+const AURA_SYSTEM_PROMPT = `
+You are "Aura", a highly empathetic, mindful, and professional wellness assistant for the MindAura app. 
+Your mission is to provide a safe, non-judgmental, and restorative space for users.
+
+Tone & Conduct:
+- Always maintain a warm, hospitable, and deeply respectful Sri Lankan tone.
+- Start with "Ayubowan" occasionally to feel local and welcoming.
+- Address the user respectfully (e.g., use their name if provided).
+- Validate feelings before giving advice (e.g., "It's completely understandable that you're feeling this way.").
+- Keep responses CONCISE (2-4 sentences).
+- Use relevant emojis sparingly (🌿, ✨, 🧘, 💙).
+
+Strict Constraints:
+- Do NOT use casual slang like "Machang", "Malli", or "Bro".
+- Crisis Protocol: If a user is in severe distress, gently guide them to professional help (e.g., 1926 helpline).
+- Do NOT provide medical prescriptions or clinical diagnoses.
+`;
 
 exports.handleChat = async (req, res) => {
     const { message, history } = req.body;
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    // 2. පිළිවෙළට ට්‍රයි කරන්න ඕනේ මොඩල් ලිස්ට් එක
+    // 2. පිළිවෙළට ට්‍රයි කරන්න ඕනේ මොඩල් ලිස්ට් එක (Rotation Logic)
     const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
     
-    // 3. Gemini එකට ගැළපෙන විදියට History එක සුද්ද කිරීම
-    // (පළවෙනි මැසේජ් එක 'model' ගේ නම් Gemini එක එරර් දෙනවා, ඒක නිසා ඒක අයින් කරනවා)
-    let cleanHistory = [];
-    if (history && Array.isArray(history)) {
-        cleanHistory = history.filter(item => item.role === 'user' || item.role === 'model');
-        if (cleanHistory.length > 0 && cleanHistory[0].role === 'model') {
-            cleanHistory.shift(); 
-        }
-    }
-
     let lastError = null;
 
-    // 4. මොඩල් එකින් එක ට්‍රයි කරන ලූප් එක
+    // 3. එකින් එක මොඩල් එක ට්‍රයි කරන ලූප් එක
     for (const modelName of modelsToTry) {
         try {
-            console.log(`🤖 Trying model: ${modelName}`);
+            console.log(`🤖 Trying Aura with model: ${modelName}`);
             
             const model = genAI.getGenerativeModel({ 
                 model: modelName,
-                systemInstruction: "You are Aura, an empathetic wellness assistant for the MindAura app. Be brief and supportive."
+                systemInstruction: AURA_SYSTEM_PROMPT // Aura ගේ පෞරුෂය මෙතනට දෙනවා
             });
+
+            // History එක සුද්ද කිරීම (Gemini එකට ගැළපෙන විදියට)
+            let cleanHistory = [];
+            if (history && Array.isArray(history)) {
+                cleanHistory = history.map(item => ({
+                    role: item.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: item.text || "" }]
+                }));
+                // පළවෙනි එක model ගේ නම් ඒක අයින් කරනවා
+                if (cleanHistory.length > 0 && cleanHistory[0].role === 'model') {
+                    cleanHistory.shift();
+                }
+            }
 
             const chat = model.startChat({ history: cleanHistory });
             const result = await chat.sendMessage(message);
@@ -42,13 +62,13 @@ exports.handleChat = async (req, res) => {
         } catch (error) {
             console.error(`❌ ${modelName} failed:`, error.message);
             lastError = error;
-            continue; // ඊළඟ මොඩල් එකට යනවා
+            continue; // ඊළඟ මොඩල් එකට මාරු වෙනවා
         }
     }
 
-    // 5. මොඩල් 3ම ෆේල් වුණොත් විතරක් මේක යවනවා
+    // 4. මොඩල් 3ම වැඩ කරේ නැත්නම් විතරක් මේක යවනවා
     return res.status(500).json({ 
-        response: "⚠️ ඔක්කොම මොඩල් ලිමිට් වෙලා වගෙයි. පොඩ්ඩක් ඉඳලා ආයෙත් ට්‍රයි කරන්න.",
-        error: lastError ? lastError.message : "Unknown Error"
+        response: "⚠️ Aura is resting for a moment. Please try again soon.",
+        debug: lastError ? lastError.message : "Unknown Error"
     });
 };
