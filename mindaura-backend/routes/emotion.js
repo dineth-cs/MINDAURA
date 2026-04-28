@@ -14,13 +14,16 @@ router.post('/save', protect, async (req, res) => {
             console.log('Backend: Performing strict AI face validation via Hugging Face...');
             
             try {
+                // 1. Clean the base64 string (remove data:image/jpeg;base64, prefix if present)
+                const cleanedImage = image.replace(/^data:image\/\w+;base64,/, "");
+
                 const hfResponse = await axios.post(
                     "https://api-inference.huggingface.co/models/dima806/facial_emotions_image_detection",
-                    Buffer.from(image, 'base64'),
+                    Buffer.from(cleanedImage, 'base64'),
                     {
                         headers: { 
-                            Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-                            "Content-Type": "application/octet-stream"
+                            'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+                            'Content-Type': 'application/octet-stream'
                         }
                     }
                 );
