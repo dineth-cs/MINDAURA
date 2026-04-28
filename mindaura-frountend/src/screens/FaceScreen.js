@@ -73,14 +73,31 @@ export default function FaceScreen() {
             navigation.navigate('RecommendationsScreen', { mood: 'Happy' });
 
         } catch (err) {
-            console.error('Mood analysis error:', err);
-            
-            if (err.response && err.response.status === 400) {
-                // Backend validation failed (e.g., No face detected)
-                Alert.alert("Scan Failed", err.response.data.message || "No human face detected. Please try again.");
-                setPhoto(null); // Reset to retake
+            if (err.response) {
+                const status = err.response.status;
+                const data = err.response.data;
+
+                if (status === 400) {
+                    // Face detection rejection from AI
+                    const reason = data.message || 'No human face clearly detected.';
+                    Alert.alert('Face Not Detected', reason);
+                    setPhoto(null);
+                    setCapturedBase64(null);
+                } else if (status === 500 && data.details) {
+                    // Raw API error — show exact details for debugging
+                    Alert.alert(
+                        `Debug Error (${status})`,
+                        data.details
+                    );
+                    setPhoto(null);
+                    setCapturedBase64(null);
+                } else {
+                    Alert.alert('Error', data.message || 'Something went wrong. Please try again.');
+                }
             } else {
-                Alert.alert("Error", "Something went wrong during analysis. Please try again later.");
+                // Network or unexpected client-side error
+                console.error('Unexpected error:', err.message);
+                Alert.alert('Connection Error', err.message || 'Could not reach the server.');
             }
         } finally {
             setIsAnalyzing(false);
