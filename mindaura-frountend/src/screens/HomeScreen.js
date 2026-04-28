@@ -10,8 +10,10 @@ import {
     Animated,
     Modal,
     Platform,
-    Linking
+    Linking,
+    Dimensions
 } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -152,6 +154,19 @@ export default function HomeScreen() {
 
     const completedTasksCount = tasks.filter(t => t.completed).length;
     const totalTasksCount = tasks.length;
+    const taskMastery = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+    // Mock data for the 7-day chart
+    const chartData = {
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        datasets: [{
+            data: [7, 8, 6, 9, 7, 8, 9], // Mood stability score (1-10)
+            color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`,
+            strokeWidth: 3
+        }]
+    };
+
+    const screenWidth = Dimensions.get('window').width;
 
     // Pulse animation logic for FAB
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -402,24 +417,64 @@ export default function HomeScreen() {
                 </View>
 
                 {/* Progress Summary Section */}
-                <View style={styles.sectionContainer}>
+                <View style={[styles.sectionContainer, styles.premiumSummaryBox, { backgroundColor: currentTheme.card }]}>
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={[styles.sectionTitle, { color: currentTheme.text }]}>Your Progress Summary</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('ProgressReportScreen')}>
+                            <Text style={styles.viewAllText}>View All</Text>
+                        </TouchableOpacity>
+                    </View>
+
                     {/* Last Check-in Indicator */}
-                    <Text style={[styles.lastCheckIn, { color: currentTheme.subText }]}>
+                    <Text style={[styles.lastCheckIn, { color: currentTheme.subText, marginTop: -8 }]}>
                         ⏱️ Last check-in: {lastCheckIn.time} ({lastCheckIn.mood} {lastCheckIn.emoji})
                     </Text>
-                    <Text style={[styles.sectionTitle, { color: currentTheme.text }]}>Your Progress Summary</Text>
+
+                    {/* Mood Stability Chart */}
+                    <View style={styles.chartWrapper}>
+                        <LineChart
+                            data={chartData}
+                            width={screenWidth - 64} // Responsive width
+                            height={180}
+                            chartConfig={{
+                                backgroundColor: currentTheme.card,
+                                backgroundGradientFrom: currentTheme.card,
+                                backgroundGradientTo: currentTheme.card,
+                                decimalPlaces: 0,
+                                color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`,
+                                labelColor: (opacity = 1) => currentTheme.subText,
+                                style: { borderRadius: 16 },
+                                propsForDots: {
+                                    r: "4",
+                                    strokeWidth: "2",
+                                    stroke: "#6B8EFE"
+                                },
+                                propsForBackgroundLines: {
+                                    strokeDasharray: "", // solid lines
+                                    stroke: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                                }
+                            }}
+                            bezier
+                            style={styles.chartStyle}
+                            withInnerLines={true}
+                            withOuterLines={false}
+                            withVerticalLines={false}
+                            withHorizontalLines={true}
+                        />
+                    </View>
+
                     <View style={styles.progressSummaryRow}>
                         <View style={[styles.summaryBlock, { backgroundColor: summaryGreen }]}>
-                            <Text style={[styles.summaryNumber, { color: '#22C55E' }]}>{completedTasksCount}</Text>
-                            <Text style={[styles.summaryLabel, { color: isDarkMode ? '#4ADE80' : '#15803D' }]}>Today</Text>
+                            <Text style={[styles.summaryNumber, { color: '#22C55E' }]}>{taskMastery}%</Text>
+                            <Text style={[styles.summaryLabel, { color: isDarkMode ? '#4ADE80' : '#15803D' }]}>Task Mastery</Text>
                         </View>
                         <View style={[styles.summaryBlock, { backgroundColor: summaryBlue }]}>
-                            <Text style={[styles.summaryNumber, { color: '#3B82F6' }]}>{weeklyCount}</Text>
-                            <Text style={[styles.summaryLabel, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]}>This Week</Text>
+                            <Text style={[styles.summaryNumber, { color: '#3B82F6', fontSize: 20 }]}>Calm 🧘‍♂️</Text>
+                            <Text style={[styles.summaryLabel, { color: isDarkMode ? '#60A5FA' : '#1D4ED8' }]}>Weekly Mood</Text>
                         </View>
                         <View style={[styles.summaryBlock, { backgroundColor: summaryPurple }]}>
-                            <Text style={[styles.summaryNumber, { color: '#A855F7' }]}>{monthlyCount}</Text>
-                            <Text style={[styles.summaryLabel, { color: isDarkMode ? '#C084FC' : '#7E22CE' }]}>This Month</Text>
+                            <Text style={[styles.summaryNumber, { color: '#A855F7' }]}>{streakCount}</Text>
+                            <Text style={[styles.summaryLabel, { color: isDarkMode ? '#C084FC' : '#7E22CE' }]}>Day Streak</Text>
                         </View>
                     </View>
                 </View>
@@ -713,8 +768,31 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     summaryLabel: {
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: '600',
+        textAlign: 'center',
+    },
+    premiumSummaryBox: {
+        padding: 16,
+        borderRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    viewAllText: {
+        fontSize: 14,
+        color: '#6B8EFE',
+        fontWeight: '600',
+    },
+    chartWrapper: {
+        alignItems: 'center',
+        marginVertical: 12,
+        marginLeft: -16, // Adjust for chart padding
+    },
+    chartStyle: {
+        borderRadius: 16,
     },
 
     // Floating Action Button
