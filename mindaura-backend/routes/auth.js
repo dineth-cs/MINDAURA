@@ -534,4 +534,61 @@ router.get('/me', protect, async (req, res) => {
     }
 });
 
+// GET /api/auth/profile — return the current user's full profile (including dailyTasks)
+router.get('/profile', protect, async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id).select('-password');
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        return res.status(200).json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            profilePicture: user.profilePicture,
+            dateOfBirth: user.dateOfBirth,
+            age: user.age,
+            isAdmin: user.isAdmin,
+            dailyTasks: user.dailyTasks || [],
+        });
+    } catch (error) {
+        console.error('GET /profile error:', error);
+        return res.status(500).json({ message: 'Server error while fetching profile' });
+    }
+});
+
+// PUT /api/auth/profile — update profile fields including dailyTasks
+router.put('/profile', protect, async (req, res) => {
+    try {
+        const { dailyTasks, name, dateOfBirth, age } = req.body;
+
+        const updateFields = {};
+        if (dailyTasks !== undefined) updateFields.dailyTasks = dailyTasks;
+        if (name !== undefined) updateFields.name = name;
+        if (dateOfBirth !== undefined) updateFields.dateOfBirth = dateOfBirth;
+        if (age !== undefined) updateFields.age = age;
+
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        ).select('-password');
+
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        console.log(`Profile updated for user ${req.user._id}. Tasks count: ${user.dailyTasks?.length ?? 0}`);
+        return res.status(200).json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            profilePicture: user.profilePicture,
+            dateOfBirth: user.dateOfBirth,
+            age: user.age,
+            dailyTasks: user.dailyTasks || [],
+        });
+    } catch (error) {
+        console.error('PUT /profile error:', error);
+        return res.status(500).json({ message: 'Server error while updating profile' });
+    }
+});
+
 module.exports = router;

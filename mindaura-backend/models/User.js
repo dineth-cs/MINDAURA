@@ -47,6 +47,16 @@ const UserSchema = new mongoose.Schema(
             type: String,
             default: 'TIER 1',
         },
+        dailyTasks: {
+            type: [
+                {
+                    id: { type: String },
+                    title: { type: String, required: true },
+                    completed: { type: Boolean, default: false },
+                }
+            ],
+            default: [],
+        },
     },
     { timestamps: true }
 );
