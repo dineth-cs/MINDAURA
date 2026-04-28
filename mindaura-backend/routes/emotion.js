@@ -15,29 +15,25 @@ router.post('/save', protect, async (req, res) => {
             try {
                 // 1. Clean base64 string (strip data URI prefix if present)
                 const cleanBase64 = image.replace(/^data:image\/\w+;base64,/, "");
-
-                // 2. Create binary buffer
                 const buffer = Buffer.from(cleanBase64, 'base64');
 
-                // 3. Use native fetch (Node.js v18+) to bypass any axios config conflicts
-                const hfFetchResponse = await fetch(
-                    'https://api-inference.huggingface.co/models/dima806/facial_emotions_image_detection',
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-                            'Content-Type': 'application/octet-stream'
-                        },
-                        body: buffer
-                    }
-                );
+                // 2. Isolated fetch — NO proxy headers, exact HF gateway spec
+                const response = await fetch("https://api-inference.huggingface.co/models/dima806/facial_emotions_image_detection", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+                        "Content-Type": "application/octet-stream",
+                        "Accept": "application/json"
+                    },
+                    body: buffer
+                });
 
-                if (!hfFetchResponse.ok) {
-                    const errText = await hfFetchResponse.text();
-                    throw new Error(`Hugging Face Fetch Error ${hfFetchResponse.status}: ${errText}`);
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`HF_API_ERROR ${response.status}: ${errText}`);
                 }
 
-                const results = await hfFetchResponse.json();
+                const results = await response.json();
                 console.log('Hugging Face API Response:', JSON.stringify(results, null, 2));
 
                 // Check if we got a valid array from AI
