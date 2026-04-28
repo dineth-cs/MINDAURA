@@ -48,19 +48,17 @@ export default function ChatScreen() {
         Keyboard.dismiss();
 
         try {
+            // Forced explicit URL and simplified payload to resolve 404
             const response = await axios.post(
                 'https://mindaura-wfut.onrender.com/api/chat',
                 {
-                    message: inputText,
-                    history: messages.map(m => ({
-                        role: m.user._id === 1 ? 'user' : 'model',
-                        parts: [{ text: m.text }]
-                    })).reverse()
+                    message: inputText
                 },
                 {
                     headers: {
-                        Authorization: `Bearer ${userToken}`,
-                    },
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${userToken}`
+                    }
                 }
             );
 
