@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
-import ExploreScreen from '../screens/ExploreScreen';
+import ChatScreen from '../screens/ChatScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { UserContext } from '../context/UserContext';
@@ -21,8 +21,8 @@ export default function MainTabs() {
 
                     if (route.name === 'Home') {
                         iconName = focused ? 'home' : 'home-outline';
-                    } else if (route.name === 'Explore') {
-                        iconName = focused ? 'compass' : 'compass-outline';
+                    } else if (route.name === 'Aura Chat') {
+                        iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
                     } else if (route.name === 'Calendar') {
                         iconName = focused ? 'calendar' : 'calendar-outline';
                     } else if (route.name === 'Profile') {
@@ -44,7 +44,7 @@ export default function MainTabs() {
             })}
         >
             <Tab.Screen name="Home" component={HomeScreen} />
-            <Tab.Screen name="Explore" component={ExploreScreen} />
+            <Tab.Screen name="Aura Chat" component={ChatScreen} />
             <Tab.Screen name="Calendar" component={CalendarScreen} />
             <Tab.Screen name="Profile" component={ProfileScreen} />
         </Tab.Navigator>
