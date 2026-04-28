@@ -14,10 +14,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../context/UserContext';
+import { AuthContext } from '../context/AuthContext';
 import axios from 'axios';
 
 export default function ChatScreen() {
     const { currentTheme, isDarkMode, name } = useContext(UserContext);
+    const { userToken } = useContext(AuthContext);
     const [messages, setMessages] = useState([
         {
             _id: 1,
@@ -46,13 +48,21 @@ export default function ChatScreen() {
         Keyboard.dismiss();
 
         try {
-            const response = await axios.post('https://mindaura-wfut.onrender.com/api/chat', {
-                message: inputText,
-                history: messages.map(m => ({
-                    role: m.user._id === 1 ? 'user' : 'model',
-                    parts: [{ text: m.text }]
-                })).reverse()
-            });
+            const response = await axios.post(
+                'https://mindaura-wfut.onrender.com/api/chat',
+                {
+                    message: inputText,
+                    history: messages.map(m => ({
+                        role: m.user._id === 1 ? 'user' : 'model',
+                        parts: [{ text: m.text }]
+                    })).reverse()
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${userToken}`,
+                    },
+                }
+            );
 
             const auraResponse = {
                 _id: Math.random().toString(),
