@@ -72,7 +72,10 @@ router.post('/save', protect, async (req, res) => {
 
             } catch (aiError) {
                 console.error('Hugging Face Error:', aiError.message);
-                return res.status(400).json({ message: 'Face analysis failed. Please try again.' });
+                return res.status(500).json({ 
+                    error: 'API_ERROR', 
+                    details: aiError.message || aiError.toString() 
+                });
             }
         }
         // ------------------------------------------------
