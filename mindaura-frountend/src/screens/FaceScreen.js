@@ -1,12 +1,6 @@
 import React, { useState, useRef, useContext } from 'react';
-import {
-    StyleSheet,
-    Text,
-    View,
-    TouchableOpacity,
-    Image,
-    ActivityIndicator
-} from 'react-native';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { Alert, StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +14,7 @@ export default function FaceScreen() {
     const { isDarkMode } = useContext(UserContext);
     const [permission, requestPermission] = useCameraPermissions();
     const [photo, setPhoto] = useState(null);
+    const [capturedBase64, setCapturedBase64] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const cameraRef = useRef(null);
 
@@ -32,17 +27,27 @@ export default function FaceScreen() {
         if (photo) {
             // Retake photo logic
             setPhoto(null);
+            setCapturedBase64(null);
             console.log("Retaking photo...");
         } else {
             // Take picture logic
             if (cameraRef.current) {
                 console.log("Taking picture...");
                 const picture = await cameraRef.current.takePictureAsync({
-                    quality: 1,      // highest quality
-                    base64: true,
+                    quality: 0.8,      // slightly reduced for manipulation speed
+                    base64: false,
                 });
-                setPhoto(picture.uri);
-                console.log("Photo captured and stored at:", picture.uri);
+
+                console.log("Flipping image and generating base64...");
+                const manipulatedPhoto = await ImageManipulator.manipulateAsync(
+                    picture.uri,
+                    [{ flip: ImageManipulator.FlipType.Horizontal }],
+                    { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+                );
+
+                setPhoto(manipulatedPhoto.uri);
+                setCapturedBase64(manipulatedPhoto.base64);
+                console.log("Photo processed successfully.");
             }
         }
     };
@@ -51,18 +56,34 @@ export default function FaceScreen() {
         setIsAnalyzing(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
-            if (token) {
-                await axios.post(
-                    'https://mindaura-wfut.onrender.com/api/emotion/save',
-                    { mood: 'Happy', source: 'face' },
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-            }
+            if (!token) throw new Error("Authentication token missing.");
+            if (!capturedBase64) throw new Error("No image data found.");
+
+            const response = await axios.post(
+                'https://mindaura-wfut.onrender.com/api/emotion/save',
+                { 
+                    mood: 'Happy', 
+                    source: 'face',
+                    image: capturedBase64 
+                },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            console.log("Analysis successful:", response.data);
+            navigation.navigate('RecommendationsScreen', { mood: 'Happy' });
+
         } catch (err) {
-            console.warn('Could not save mood entry (face):', err.message);
+            console.error('Mood analysis error:', err);
+            
+            if (err.response && err.response.status === 400) {
+                // Backend validation failed (e.g., No face detected)
+                Alert.alert("Scan Failed", err.response.data.message || "No human face detected. Please try again.");
+                setPhoto(null); // Reset to retake
+            } else {
+                Alert.alert("Error", "Something went wrong during analysis. Please try again later.");
+            }
         } finally {
             setIsAnalyzing(false);
-            navigation.navigate('RecommendationsScreen', { mood: 'Happy' });
         }
     };
 
@@ -97,11 +118,17 @@ export default function FaceScreen() {
                 {photo ? (
                     <Image source={{ uri: photo }} style={styles.cameraView} />
                 ) : (
-                    <CameraView
-                        style={styles.cameraView}
-                        facing="front"
-                        ref={cameraRef}
-                    />
+                    <>
+                        <CameraView
+                            style={styles.cameraView}
+                            facing="front"
+                            ref={cameraRef}
+                        />
+                        {/* Face Alignment Overlay */}
+                        <View style={styles.overlayContainer}>
+                            <View style={styles.faceOutline} />
+                        </View>
+                    </>
                 )}
             </View>
         );
@@ -121,9 +148,29 @@ export default function FaceScreen() {
                 </View>
 
                 {/* Subtitle / Instructions */}
-                <Text style={[styles.subtitle, { color: subTextColor }]}>
-                    Show how you feel... Our AI will analyze your facial micro-expressions.
-                </Text>
+                <View style={styles.instructionsContainer}>
+                    <Text style={[styles.subtitle, { color: subTextColor, marginBottom: 12 }]}>
+                        Show how you feel... Our AI will analyze your facial micro-expressions.
+                    </Text>
+                    
+                    {!photo && (
+                        <View style={styles.guidelinesBox}>
+                            <Text style={[styles.guidelinesTitle, { color: textColor }]}>Scan Guidelines:</Text>
+                            <View style={styles.guidelineRow}>
+                                <Ionicons name="checkmark-circle" size={16} color="#6B8EFE" />
+                                <Text style={[styles.guidelineText, { color: subTextColor }]}>Face the camera directly.</Text>
+                            </View>
+                            <View style={styles.guidelineRow}>
+                                <Ionicons name="checkmark-circle" size={16} color="#6B8EFE" />
+                                <Text style={[styles.guidelineText, { color: subTextColor }]}>Align your face within the central outline.</Text>
+                            </View>
+                            <View style={styles.guidelineRow}>
+                                <Ionicons name="checkmark-circle" size={16} color="#6B8EFE" />
+                                <Text style={[styles.guidelineText, { color: subTextColor }]}>Ensure you are in a well-lit area.</Text>
+                            </View>
+                        </View>
+                    )}
+                </View>
 
                 {/* Center Area: Camera Display area */}
                 <View style={styles.cameraPlaceholderArea}>
@@ -141,7 +188,10 @@ export default function FaceScreen() {
                                 disabled={isAnalyzing}
                             >
                                 {isAnalyzing ? (
-                                    <ActivityIndicator color="#FFFFFF" />
+                                    <View style={styles.loadingContainer}>
+                                        <ActivityIndicator color="#FFFFFF" />
+                                        <Text style={styles.loadingText}>Detecting Face...</Text>
+                                    </View>
                                 ) : (
                                     <Text style={styles.analyzeButtonText}>Analyze My Face ✨</Text>
                                 )}
@@ -297,5 +347,55 @@ const styles = StyleSheet.create({
         color: '#6B7280', // Soft gray
         fontSize: 16,
         fontWeight: '600',
+    },
+    // Overlay & Guidelines
+    overlayContainer: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'transparent',
+    },
+    faceOutline: {
+        width: 250,
+        height: 320,
+        borderRadius: 125, // Oval shape
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        borderStyle: 'dashed',
+    },
+    instructionsContainer: {
+        marginTop: 16,
+        marginBottom: 24,
+    },
+    guidelinesBox: {
+        backgroundColor: 'rgba(107, 142, 254, 0.05)',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 8,
+    },
+    guidelinesTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginBottom: 8,
+    },
+    guidelineRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    guidelineText: {
+        fontSize: 13,
+        marginLeft: 8,
+    },
+    loadingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadingText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
+        marginLeft: 12,
     },
 });
