@@ -26,19 +26,20 @@ router.post('/save', protect, async (req, res) => {
                 );
 
                 const results = hfResponse.data;
+                console.log('Hugging Face API Response:', JSON.stringify(results, null, 2));
                 
                 // 1. Check if we got valid results from AI
                 if (!Array.isArray(results) || results.length === 0) {
-                    throw new Error("Invalid AI response");
+                    throw new Error("Invalid AI response: Results array is empty or malformed.");
                 }
 
                 // 2. Find the top result (highest score)
                 const topResult = results.sort((a, b) => b.score - a.score)[0];
-                console.log('AI Analysis Result:', topResult);
+                console.log('AI Top Result:', topResult);
 
-                // 3. STRICT VALIDATION: Check confidence threshold (0.45)
-                if (topResult.score < 0.45) {
-                    console.warn('Face validation FAILED: Confidence too low (', topResult.score, ')');
+                // 3. DEBUG: Temporarily lowered confidence threshold (0.1) to diagnose detection issues
+                if (topResult.score < 0.1) {
+                    console.warn('Face validation FAILED: Confidence too low (', topResult.score, ') even with 0.1 threshold.');
                     return res.status(400).json({ 
                         message: "No human face clearly detected. Please face the camera directly and try again." 
                     });
@@ -59,7 +60,7 @@ router.post('/save', protect, async (req, res) => {
                 }
 
             } catch (aiError) {
-                console.error('Hugging Face AI Error:', aiError.message);
+                console.error('Hugging Face API Error:', aiError.response ? aiError.response.data : aiError.message);
                 return res.status(400).json({ message: "Face analysis failed. Please try again." });
             }
         }
