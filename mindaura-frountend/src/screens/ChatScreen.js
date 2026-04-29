@@ -52,7 +52,8 @@ export default function ChatScreen() {
             const response = await axios.post(
                 'https://mindaura-wfut.onrender.com/api/chat',
                 {
-                    message: inputText
+                    message: inputText,
+                    history: []
                 },
                 {
                     headers: {
@@ -74,7 +75,7 @@ export default function ChatScreen() {
             console.error('Chat Error:', error);
             const errorMessage = {
                 _id: Math.random().toString(),
-                text: "I'm having trouble connecting right now. Please try again in a moment.",
+                text: "⚠️ Sorry, I'm having trouble connecting right now.",
                 createdAt: new Date(),
                 user: { _id: 2, name: 'Aura' },
             };
