@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const axios = require('axios');
 
 // 1. Aura ගේ පෞරුෂය (The Professional System Prompt)
 const AURA_SYSTEM_PROMPT = `
@@ -23,23 +24,32 @@ exports.handleChat = async (req, res) => {
     try {
         console.log("=== Message Received ===", req.body.message);
 
-        if (!process.env.GEMINI_API_KEY) {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
             return res.status(200).json({ response: "⚠️ API Key is missing in Render!" });
         }
 
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Direct REST API call to Gemini
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        
+        const payload = {
+            contents: [{ parts: [{ text: req.body.message }] }]
+        };
 
-        const result = await model.generateContent(req.body.message);
-        const responseText = result.response.text();
+        const response = await axios.post(url, payload, {
+            headers: { 'Content-Type': 'application/json' }
+        });
 
+        const responseText = response.data.candidates[0].content.parts[0].text;
         return res.status(200).json({ response: responseText });
 
     } catch (error) {
-        console.error("=== CRITICAL ERROR ===", error.message);
-        // Return 200 status so Axios doesn't crash, and send the error to the UI
+        // Extract the exact error message from Google's response
+        const errMsg = error?.response?.data?.error?.message || error.message;
+        console.error("=== DIRECT API ERROR ===", errMsg);
+        
         return res.status(200).json({ 
-            response: `⚠️ Backend Error: ${error.message}` 
+            response: `⚠️ Google API Error: ${errMsg}` 
         });
     }
 };
