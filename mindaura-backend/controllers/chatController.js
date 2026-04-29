@@ -30,7 +30,7 @@ exports.handleChat = async (req, res) => {
         }
 
         // Direct REST API call to Gemini
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent?key=${apiKey}`;
         
         const payload = {
             contents: [{ parts: [{ text: req.body.message }] }]
