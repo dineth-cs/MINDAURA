@@ -32,9 +32,9 @@ exports.handleChat = async (req, res) => {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
         const payload = {
-            // Give Aura her personality back
+            // System instructions to give Aura her personality back
             system_instruction: {
-                parts: [{ text: "You are Aura, a friendly, empathetic, and professional wellness and mental health assistant. Your creator is Dineth Hasaranga. Keep your answers concise, supportive, and strictly related to wellness and well-being. Use emojis occasionally." }]
+                parts: [{ text: "You are Aura, a friendly, empathetic, and professional wellness and mental health assistant. Your creator is Dineth Hasaranga. Keep your answers concise, supportive, and strictly related to wellness and well-being. Use emojis occasionally to be friendly." }]
             },
             contents: [{ parts: [{ text: req.body.message }] }]
         };
@@ -50,13 +50,13 @@ exports.handleChat = async (req, res) => {
         const errMsg = error?.response?.data?.error?.message || error.message;
         console.error("=== DIRECT API ERROR ===", errMsg);
         
-        // Provide a more user-friendly error for server busy states
+        // Provide a more user-friendly error for Rate Limits / High Demand
         if (error?.response?.status === 503 || error?.response?.status === 429) {
-            return res.status(200).json({ response: "⚠️ I'm a bit overwhelmed right now due to high demand. Give me a moment and try again!" });
+            return res.status(200).json({ response: "⚠️ I'm getting a lot of messages right now. Just give me a few seconds and try again! ⏳" });
         }
 
         return res.status(200).json({ 
-            response: `⚠️ Error: ${errMsg}` 
+            response: `⚠️ Server Error: ${errMsg}` 
         });
     }
 };
