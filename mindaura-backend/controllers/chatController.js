@@ -19,6 +19,8 @@ Strict Constraints:
 - Crisis Protocol: If a user is in severe distress, gently guide them to professional help (e.g., 1926 helpline).
 - Do NOT provide medical prescriptions or clinical diagnoses.
 `;
+// Helper function to create a delay
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 exports.handleChat = async (req, res) => {
     try {
@@ -32,31 +34,43 @@ exports.handleChat = async (req, res) => {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
         const payload = {
-            // System instructions to give Aura her personality back
             system_instruction: {
-                parts: [{ text: "You are Aura, a friendly, empathetic, and professional wellness and mental health assistant. Your creator is Dineth Hasaranga. Keep your answers concise, supportive, and strictly related to wellness and well-being. Use emojis occasionally to be friendly." }]
+                parts: [{ text: "You are Aura, a friendly, empathetic, and professional wellness and mental health assistant. Your creator is Dineth Hasaranga. Keep your answers concise, supportive, and strictly related to wellness and well-being. Use emojis occasionally." }]
             },
             contents: [{ parts: [{ text: req.body.message }] }]
         };
 
-        const response = await axios.post(url, payload, {
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const responseText = response.data.candidates[0].content.parts[0].text;
-        return res.status(200).json({ response: responseText });
+        // Auto-Retry Logic: Try up to 3 times
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                const response = await axios.post(url, payload, {
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const responseText = response.data.candidates[0].content.parts[0].text;
+                return res.status(200).json({ response: responseText });
+                
+            } catch (error) {
+                const status = error?.response?.status;
+                // If Rate Limited (429) or Server Busy (503), wait and retry
+                if ((status === 429 || status === 503) && retries > 1) {
+                    console.log(`⚠️ Rate limited by Google! Retrying... (${retries - 1} attempts left)`);
+                    retries--;
+                    await sleep(2000); // Wait 2 seconds before trying again
+                    continue; 
+                }
+                // If it's a different error or out of retries, throw it to the main catch block
+                throw error;
+            }
+        }
 
     } catch (error) {
         const errMsg = error?.response?.data?.error?.message || error.message;
-        console.error("=== DIRECT API ERROR ===", errMsg);
+        console.error("=== FINAL API ERROR ===", errMsg);
         
-        // Provide a more user-friendly error for Rate Limits / High Demand
-        if (error?.response?.status === 503 || error?.response?.status === 429) {
-            return res.status(200).json({ response: "⚠️ I'm getting a lot of messages right now. Just give me a few seconds and try again! ⏳" });
-        }
-
         return res.status(200).json({ 
-            response: `⚠️ Server Error: ${errMsg}` 
+            response: "⚠️ I'm getting a lot of messages right now. Just give me a few seconds and try again! ⏳" 
         });
     }
 };
