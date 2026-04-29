@@ -20,55 +20,26 @@ Strict Constraints:
 `;
 
 exports.handleChat = async (req, res) => {
-    const { message, history } = req.body;
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    try {
+        console.log("=== Message Received ===", req.body.message);
 
-    // 2. පිළිවෙළට ට්‍රයි කරන්න ඕනේ මොඩල් ලිස්ට් එක (Rotation Logic)
-    const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
-    
-    let lastError = null;
-
-    // 3. එකින් එක මොඩල් එක ට්‍රයි කරන ලූප් එක
-    for (const modelName of modelsToTry) {
-        try {
-            console.log(`🤖 Trying Aura with model: ${modelName}`);
-            
-            const model = genAI.getGenerativeModel({ 
-                model: modelName,
-                systemInstruction: AURA_SYSTEM_PROMPT // Aura ගේ පෞරුෂය මෙතනට දෙනවා
-            });
-
-            // History එක සුද්ද කිරීම (Gemini එකට ගැළපෙන විදියට)
-            let cleanHistory = [];
-            if (history && Array.isArray(history)) {
-                cleanHistory = history.map(item => ({
-                    role: item.role === 'user' ? 'user' : 'model',
-                    parts: [{ text: item.text || "" }]
-                }));
-                // පළවෙනි එක model ගේ නම් ඒක අයින් කරනවා
-                if (cleanHistory.length > 0 && cleanHistory[0].role === 'model') {
-                    cleanHistory.shift();
-                }
-            }
-
-            const chat = model.startChat({ history: cleanHistory });
-            const result = await chat.sendMessage(message);
-            const responseText = result.response.text();
-
-            // ✅ වැඩේ හරි නම් මෙතනින් රිප්ලයි එක යවනවා
-            console.log(`✅ Success with ${modelName}!`);
-            return res.json({ response: responseText });
-
-        } catch (error) {
-            console.error(`❌ ${modelName} failed:`, error.message);
-            lastError = error;
-            continue; // ඊළඟ මොඩල් එකට මාරු වෙනවා
+        if (!process.env.GEMINI_API_KEY) {
+            return res.status(200).json({ response: "⚠️ API Key is missing in Render!" });
         }
-    }
 
-    // 4. මොඩල් 3ම වැඩ කරේ නැත්නම් විතරක් මේක යවනවා
-    return res.status(500).json({ 
-        response: "⚠️ Aura is resting for a moment. Please try again soon.",
-        debug: lastError ? lastError.message : "Unknown Error"
-    });
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const result = await model.generateContent(req.body.message);
+        const responseText = result.response.text();
+
+        return res.status(200).json({ response: responseText });
+
+    } catch (error) {
+        console.error("=== CRITICAL ERROR ===", error.message);
+        // Return 200 status so Axios doesn't crash, and send the error to the UI
+        return res.status(200).json({ 
+            response: `⚠️ Backend Error: ${error.message}` 
+        });
+    }
 };
