@@ -319,9 +319,21 @@ export default function CalendarScreen() {
                         {getOverallMoodText()}
                     </Text>
                     <LineChart
-                        data={buildChartData(selectedTab)}
+                        data={(() => {
+                            const data = buildChartData(selectedTab);
+                            return {
+                                ...data,
+                                datasets: [
+                                    ...data.datasets,
+                                    { data: [10], withDots: false, color: () => 'rgba(0,0,0,0)' }
+                                ]
+                            };
+                        })()}
                         width={screenWidth - 60}
                         height={220}
+                        fromZero={true}
+                        segments={5}
+                        formatYLabel={(value) => parseInt(value).toString()}
                         chartConfig={chartConfig}
                         getDotColor={(dataPoint) => scoreToColor(dataPoint)}
                         bezier
