@@ -19,8 +19,10 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ChatScreen() {
-    const { currentTheme, isDarkMode, name } = useContext(UserContext);
+    const { currentTheme, isDarkMode, name, email } = useContext(UserContext);
     const { userToken } = useContext(AuthContext);
+    
+    const CHAT_STORAGE_KEY = `auraChatHistory_${email || 'default'}`;
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +31,7 @@ export default function ChatScreen() {
     useEffect(() => {
         const loadMessages = async () => {
             try {
-                const savedMessages = await AsyncStorage.getItem('auraChatHistory');
+                const savedMessages = await AsyncStorage.getItem(CHAT_STORAGE_KEY);
                 if (savedMessages) {
                     setMessages(JSON.parse(savedMessages));
                 } else {
@@ -45,13 +47,13 @@ export default function ChatScreen() {
             }
         };
         loadMessages();
-    }, [name]);
+    }, [name, CHAT_STORAGE_KEY]);
 
     useEffect(() => {
         if (messages.length > 0) {
-            AsyncStorage.setItem('auraChatHistory', JSON.stringify(messages));
+            AsyncStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
         }
-    }, [messages]);
+    }, [messages, CHAT_STORAGE_KEY]);
 
     const sendMessage = async () => {
         if (inputText.trim() === '') return;
