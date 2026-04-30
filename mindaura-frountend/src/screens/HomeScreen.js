@@ -11,7 +11,8 @@ import {
     Modal,
     Platform,
     Linking,
-    Dimensions
+    Dimensions,
+    Alert
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -419,14 +420,26 @@ export default function HomeScreen() {
                 {/* Progress Summary Section */}
                 <View style={[styles.sectionContainer, styles.premiumSummaryBox, { backgroundColor: currentTheme.card }]}>
                     <View style={styles.sectionHeaderRow}>
-                        <Text style={[styles.sectionTitle, { color: currentTheme.text }]}>Your Progress Summary</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={[styles.sectionTitle, { color: currentTheme.text }]}>Your Progress Summary</Text>
+                            <TouchableOpacity 
+                                onPress={() => Alert.alert("Wellness Score", "This is your daily Wellness Score (out of 10). Aura calculates this based on your voice, facial expressions, and text interactions.")}
+                                style={{ marginLeft: 6 }}
+                            >
+                                <Ionicons name="information-circle-outline" size={20} color={currentTheme.subText} />
+                            </TouchableOpacity>
+                        </View>
                         <TouchableOpacity onPress={() => navigation.navigate('ProgressReportScreen')}>
                             <Text style={styles.viewAllText}>View All</Text>
                         </TouchableOpacity>
                     </View>
 
+                    <Text style={{ fontSize: 13, color: currentTheme.subText, marginBottom: 8, marginTop: -8 }}>
+                        Your emotional wellness score out of 10 over the past 7 days.
+                    </Text>
+
                     {/* Last Check-in Indicator */}
-                    <Text style={[styles.lastCheckIn, { color: currentTheme.subText, marginTop: -8 }]}>
+                    <Text style={[styles.lastCheckIn, { color: currentTheme.subText }]}>
                         ⏱️ Last check-in: {lastCheckIn.time} ({lastCheckIn.mood} {lastCheckIn.emoji})
                     </Text>
 
@@ -436,6 +449,13 @@ export default function HomeScreen() {
                             data={chartData}
                             width={screenWidth - 64} // Responsive width
                             height={180}
+                            formatYLabel={(yValue) => {
+                                const val = parseInt(yValue, 10);
+                                if (val >= 9) return `${val} 😊`;
+                                if (val >= 7) return `${val} 🧘`;
+                                if (val >= 5) return `${val} ☁️`;
+                                return `${val}`;
+                            }}
                             chartConfig={{
                                 backgroundColor: currentTheme.card,
                                 backgroundGradientFrom: currentTheme.card,
