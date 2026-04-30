@@ -15,10 +15,12 @@ import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
+import { AuthContext } from '../context/AuthContext';
 
 export default function VoiceScreen() {
     const navigation = useNavigation();
     const { isDarkMode } = useContext(UserContext);
+    const { userId } = useContext(AuthContext);
     const [recording, setRecording] = useState(null);
     const [isRecording, setIsRecording] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -31,6 +33,42 @@ export default function VoiceScreen() {
     const subTextColor = isDarkMode ? '#AAAAAA' : '#6B7280';
     const pulseActiveBg = isDarkMode ? '#D32F2F' : '#FF5252';
     const recordBtnBg = isDarkMode ? '#2C2A1E' : '#FFF9C4';
+
+    const updateStreak = async () => {
+        try {
+            const todayStr = new Date().toDateString();
+            const lastLogDate = await AsyncStorage.getItem(`lastMoodLogDate_${userId}`);
+            const storedStreak = await AsyncStorage.getItem(`streakCount_${userId}`);
+            let currentStreak = storedStreak ? parseInt(storedStreak, 10) : 0;
+
+            if (lastLogDate === todayStr) {
+                console.log('Streak: Already logged today. Streak stays at', currentStreak);
+                return;
+            }
+
+            if (lastLogDate) {
+                const lastDate = new Date(lastLogDate);
+                const today = new Date(todayStr);
+                const diffDays = Math.round((today - lastDate) / (1000 * 60 * 60 * 24));
+
+                if (diffDays === 1) {
+                    currentStreak += 1;
+                    console.log('Streak: Consecutive day! New streak =', currentStreak);
+                } else {
+                    currentStreak = 1;
+                    console.log('Streak: Missed a day. Reset to 1.');
+                }
+            } else {
+                currentStreak = 1;
+                console.log('Streak: First mood log! Streak starts at 1.');
+            }
+
+            await AsyncStorage.setItem(`lastMoodLogDate_${userId}`, todayStr);
+            await AsyncStorage.setItem(`streakCount_${userId}`, String(currentStreak));
+        } catch (e) {
+            console.warn('Could not update streak:', e);
+        }
+    };
 
     // Clean up timer on unmount
     useEffect(() => {
@@ -120,6 +158,7 @@ export default function VoiceScreen() {
                     { mood: 'Happy', source: 'voice' },
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
+                await updateStreak();
                 DeviceEventEmitter.emit('MoodUpdated');
             }
         } catch (err) {

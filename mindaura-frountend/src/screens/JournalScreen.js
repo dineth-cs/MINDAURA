@@ -20,10 +20,12 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
+import { AuthContext } from '../context/AuthContext';
 
 export default function JournalScreen() {
     const navigation = useNavigation();
     const { isDarkMode } = useContext(UserContext);
+    const { userId } = useContext(AuthContext);
     const [journalText, setJournalText] = useState('');
     const [detectedMood, setDetectedMood] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -34,6 +36,42 @@ export default function JournalScreen() {
     const inputBgColor = isDarkMode ? '#1E1E1E' : '#FAF5FF';
     const resultCardBg = isDarkMode ? '#2A2A2A' : '#F3F4F6';
     const borderColor = isDarkMode ? '#333333' : '#E9D5FF';
+
+    const updateStreak = async () => {
+        try {
+            const todayStr = new Date().toDateString();
+            const lastLogDate = await AsyncStorage.getItem(`lastMoodLogDate_${userId}`);
+            const storedStreak = await AsyncStorage.getItem(`streakCount_${userId}`);
+            let currentStreak = storedStreak ? parseInt(storedStreak, 10) : 0;
+
+            if (lastLogDate === todayStr) {
+                console.log('Streak: Already logged today. Streak stays at', currentStreak);
+                return;
+            }
+
+            if (lastLogDate) {
+                const lastDate = new Date(lastLogDate);
+                const today = new Date(todayStr);
+                const diffDays = Math.round((today - lastDate) / (1000 * 60 * 60 * 24));
+
+                if (diffDays === 1) {
+                    currentStreak += 1;
+                    console.log('Streak: Consecutive day! New streak =', currentStreak);
+                } else {
+                    currentStreak = 1;
+                    console.log('Streak: Missed a day. Reset to 1.');
+                }
+            } else {
+                currentStreak = 1;
+                console.log('Streak: First mood log! Streak starts at 1.');
+            }
+
+            await AsyncStorage.setItem(`lastMoodLogDate_${userId}`, todayStr);
+            await AsyncStorage.setItem(`streakCount_${userId}`, String(currentStreak));
+        } catch (e) {
+            console.warn('Could not update streak:', e);
+        }
+    };
 
     const handleAnalyzeMood = async () => {
         if (journalText.trim() === '') {
@@ -51,6 +89,7 @@ export default function JournalScreen() {
                     { mood: 'Happy', source: 'journal' },
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
+                await updateStreak();
                 DeviceEventEmitter.emit('MoodUpdated');
             }
         } catch (err) {
