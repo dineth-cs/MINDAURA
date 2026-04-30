@@ -179,9 +179,12 @@ export default function ChatScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
-                <View style={[styles.inputWrapper, { backgroundColor: currentTheme.card, borderTopColor: currentTheme.border }]}>
+                <View style={[styles.inputWrapper, { backgroundColor: currentTheme.bg }]}>
                     <TextInput
-                        style={[styles.input, { color: currentTheme.text }]}
+                        style={[styles.input, { 
+                            color: currentTheme.text,
+                            backgroundColor: isDarkMode ? '#2D2D2D' : '#FFFFFF'
+                        }]}
                         placeholder="Type your message..."
                         placeholderTextColor={currentTheme.subText}
                         value={inputText}
@@ -189,11 +192,12 @@ export default function ChatScreen() {
                         multiline
                     />
                     <TouchableOpacity 
-                        style={[styles.sendButton, { opacity: inputText.trim() ? 1 : 0.5 }]} 
+                        style={[styles.sendButton, { opacity: inputText.trim() ? 1 : 0.6 }]} 
                         onPress={sendMessage}
                         disabled={!inputText.trim() || isLoading}
+                        activeOpacity={0.8}
                     >
-                        <Ionicons name="send" size={20} color="#FFFFFF" />
+                        <Ionicons name="send" size={20} color="#FFFFFF" style={{ marginLeft: 3 }} />
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -287,26 +291,39 @@ const styles = StyleSheet.create({
     },
     inputWrapper: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-end',
         paddingHorizontal: 15,
-        paddingVertical: 10,
-        borderTopWidth: 1,
+        paddingVertical: 12,
+        paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     },
     input: {
         flex: 1,
-        maxHeight: 100,
-        paddingTop: 10,
-        paddingBottom: 10,
-        paddingHorizontal: 15,
-        fontSize: 16,
+        borderRadius: 25,
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'ios' ? 14 : 12,
+        paddingBottom: Platform.OS === 'ios' ? 14 : 12,
+        minHeight: 48,
+        maxHeight: 120,
+        fontSize: 15,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 2,
     },
     sendButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: '#6B8EFE',
         justifyContent: 'center',
         alignItems: 'center',
         marginLeft: 10,
+        marginBottom: 0,
+        shadowColor: '#6B8EFE',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 4,
     },
 });
