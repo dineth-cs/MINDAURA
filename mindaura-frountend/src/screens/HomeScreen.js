@@ -12,7 +12,8 @@ import {
     Platform,
     Linking,
     Dimensions,
-    Alert
+    Alert,
+    BackHandler
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -47,6 +48,19 @@ export default function HomeScreen() {
     const [permissionType, setPermissionType] = useState(''); // 'camera' or 'microphone'
     const [weeklyCount, setWeeklyCount] = useState(0);
     const [monthlyCount, setMonthlyCount] = useState(0);
+
+    useFocusEffect(
+        useCallback(() => {
+            const onBackPress = () => {
+                BackHandler.exitApp();
+                return true;
+            };
+
+            BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+            return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+        }, [])
+    );
 
     // --- Gamification & AI Lifestyle Assistant ---
     const [streakCount, setStreakCount] = useState(0);

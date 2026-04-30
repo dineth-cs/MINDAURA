@@ -55,7 +55,10 @@ export default function LoginScreen() {
         });
 
         Alert.alert('Success', 'Login Successful!');
-        navigation.replace('MainTabs');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
       }
     } catch (error) {
       Alert.alert('Error', 'Invalid email or password');
