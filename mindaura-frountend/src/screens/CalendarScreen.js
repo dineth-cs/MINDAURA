@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
 import { LineChart } from 'react-native-chart-kit';
@@ -54,52 +54,54 @@ export default function CalendarScreen() {
     const [selectedDate, setSelectedDate] = useState(today);
 
     // --- Fetch real mood history from backend ---
-    useEffect(() => {
-        const fetchMoodHistory = async () => {
-            try {
-                const token = await AsyncStorage.getItem('userToken');
-                if (!token) return;
+    useFocusEffect(
+        useCallback(() => {
+            const fetchMoodHistory = async () => {
+                try {
+                    const token = await AsyncStorage.getItem('userToken');
+                    if (!token) return;
 
-                const response = await axios.get(
-                    'https://mindaura-wfut.onrender.com/api/emotion/history',
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
+                    const response = await axios.get(
+                        'https://mindaura-wfut.onrender.com/api/emotion/history',
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
 
-                const history = response.data || [];
-                setMoodHistory(history);
+                    const history = response.data || [];
+                    setMoodHistory(history);
 
-                // Build markedDates: one colored dot per date, keyed to the dominant mood of that day
-                const built = {};
-                history.forEach(entry => {
-                    const dateKey = entry.date ? entry.date.split('T')[0] : null;
-                    const mood = entry.mood || 'Neutral';
-                    if (dateKey && MOOD_COLORS[mood]) {
-                        // Last write wins – most recent entry's mood colour shows on that day
-                        built[dateKey] = {
-                            marked: true,
-                            dotColor: MOOD_COLORS[mood],
-                        };
-                    }
-                });
+                    // Build markedDates: one colored dot per date, keyed to the dominant mood of that day
+                    const built = {};
+                    history.forEach(entry => {
+                        const dateKey = entry.date ? entry.date.split('T')[0] : null;
+                        const mood = entry.mood || 'Neutral';
+                        if (dateKey && MOOD_COLORS[mood]) {
+                            // Last write wins – most recent entry's mood colour shows on that day
+                            built[dateKey] = {
+                                marked: true,
+                                dotColor: MOOD_COLORS[mood],
+                            };
+                        }
+                    });
 
-                // Merge selection state for today without overwriting the dot
-                const todayMark = built[today] || {};
-                built[today] = { ...todayMark, selected: true, selectedColor: '#6B8EFE', selectedTextColor: '#FFFFFF' };
-                setMarkedDates(built);
+                    // Merge selection state for today without overwriting the dot
+                    const todayMark = built[today] || {};
+                    built[today] = { ...todayMark, selected: true, selectedColor: '#6B8EFE', selectedTextColor: '#FFFFFF' };
+                    setMarkedDates(built);
 
-            } catch (error) {
-                console.warn('Mood history not available yet:', error.message);
-                // Graceful fallback: show only today highlighted, no fake data
-                setMarkedDates({
-                    [today]: { selected: true, selectedColor: '#6B8EFE', selectedTextColor: '#FFFFFF' }
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
+                } catch (error) {
+                    console.warn('Mood history not available yet:', error.message);
+                    // Graceful fallback: show only today highlighted, no fake data
+                    setMarkedDates({
+                        [today]: { selected: true, selectedColor: '#6B8EFE', selectedTextColor: '#FFFFFF' }
+                    });
+                } finally {
+                    setLoading(false);
+                }
+            };
 
-        fetchMoodHistory();
-    }, []);
+            fetchMoodHistory();
+        }, [today])
+    );
 
     // --- Build real chart data from moodHistory, fallback to zeros ---
     const buildChartData = (period) => {

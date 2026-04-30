@@ -8,10 +8,12 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
+import { AuthContext } from '../context/AuthContext';
 
 export default function FaceScreen() {
     const navigation = useNavigation();
     const { isDarkMode } = useContext(UserContext);
+    const { userId } = useContext(AuthContext);
     const [permission, requestPermission] = useCameraPermissions();
     const [photo, setPhoto] = useState(null);
     const [capturedBase64, setCapturedBase64] = useState(null);
@@ -52,12 +54,11 @@ export default function FaceScreen() {
         }
     };
 
-    // ── Streak Counter: called after every successful mood log ──
     const updateStreak = async () => {
         try {
             const todayStr = new Date().toDateString();
-            const lastLogDate = await AsyncStorage.getItem('lastMoodLogDate');
-            const storedStreak = await AsyncStorage.getItem('streakCount');
+            const lastLogDate = await AsyncStorage.getItem(`lastMoodLogDate_${userId}`);
+            const storedStreak = await AsyncStorage.getItem(`streakCount_${userId}`);
             let currentStreak = storedStreak ? parseInt(storedStreak, 10) : 0;
 
             if (lastLogDate === todayStr) {
@@ -86,8 +87,8 @@ export default function FaceScreen() {
                 console.log('Streak: First mood log! Streak starts at 1.');
             }
 
-            await AsyncStorage.setItem('lastMoodLogDate', todayStr);
-            await AsyncStorage.setItem('streakCount', String(currentStreak));
+            await AsyncStorage.setItem(`lastMoodLogDate_${userId}`, todayStr);
+            await AsyncStorage.setItem(`streakCount_${userId}`, String(currentStreak));
         } catch (e) {
             console.warn('Could not update streak:', e);
         }

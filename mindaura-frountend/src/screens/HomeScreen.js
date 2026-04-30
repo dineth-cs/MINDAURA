@@ -30,7 +30,7 @@ import { AuthContext } from '../context/AuthContext';
 export default function HomeScreen() {
     const navigation = useNavigation();
     const { name, profilePic, isDarkMode, currentTheme, updateUserContext } = useContext(UserContext);
-    const { signOut, hasNotification, setHasNotification } = useContext(AuthContext);
+    const { signOut, hasNotification, setHasNotification, userId } = useContext(AuthContext);
 
     const cardPurple = isDarkMode ? 'rgba(107, 142, 254, 0.15)' : '#F5EFFF';
     const cardYellow = isDarkMode ? 'rgba(245, 124, 0, 0.15)' : '#FFF8E1';
@@ -79,18 +79,87 @@ export default function HomeScreen() {
 
     // ── Streak: load from AsyncStorage whenever the screen is focused ──
     const loadStreakFromStorage = useCallback(async () => {
+        if (!userId) return;
         try {
-            const stored = await AsyncStorage.getItem('streakCount');
+            const stored = await AsyncStorage.getItem(`streakCount_${userId}`);
             if (stored !== null) setStreakCount(parseInt(stored, 10));
+            else setStreakCount(0);
         } catch (e) {
             console.warn('Could not load streak:', e);
+        }
+    }, [userId]);
+
+    // ── Mood History: Load from API for chart and counts ──
+    const [chartDataState, setChartDataState] = useState({
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        datasets: [
+            { data: [0,0,0,0,0,0,0], color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`, strokeWidth: 3 },
+            { data: [10], withDots: false, color: () => 'rgba(0, 0, 0, 0)' }
+        ]
+    });
+
+    const loadMoodHistory = useCallback(async () => {
+        try {
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token) return;
+
+            const response = await axios.get(
+                'https://mindaura-wfut.onrender.com/api/emotion/history',
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const history = response.data || [];
+
+            const now = new Date();
+            const weekStart = new Date(now);
+            weekStart.setDate(now.getDate() - now.getDay() + 1);
+            weekStart.setHours(0,0,0,0);
+            
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+            let weekCount = 0;
+            let monthCount = 0;
+
+            history.forEach(entry => {
+                if (entry.date) {
+                    const d = new Date(entry.date);
+                    if (d >= weekStart) weekCount++;
+                    if (d >= monthStart) monthCount++;
+                }
+            });
+
+            setWeeklyCount(weekCount);
+            setMonthlyCount(monthCount);
+
+            const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+            const moodScore = (mood) => ({ Happy: 9, Energy: 8, Neutral: 6, Bored: 5, Sad: 3, Stress: 2, Anxious: 2 }[mood] || 5);
+            
+            const data = days.map((_, i) => {
+                const day = new Date(weekStart);
+                day.setDate(weekStart.getDate() + i);
+                const dateStr = day.toISOString().split('T')[0];
+                const dayEntries = history.filter(e => e.date && e.date.startsWith(dateStr));
+                if (!dayEntries.length) return 0;
+                return Math.round(dayEntries.reduce((s, e) => s + moodScore(e.mood), 0) / dayEntries.length);
+            });
+
+            setChartDataState({
+                labels: days,
+                datasets: [
+                    { data, color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`, strokeWidth: 3 },
+                    { data: [10], withDots: false, color: () => 'rgba(0, 0, 0, 0)' }
+                ]
+            });
+
+        } catch (error) {
+            console.warn('Failed to load home mood history:', error);
         }
     }, []);
 
     useFocusEffect(
         useCallback(() => {
             loadStreakFromStorage();
-        }, [loadStreakFromStorage])
+            loadMoodHistory();
+        }, [loadStreakFromStorage, loadMoodHistory])
     );
 
     // ── Midnight Task Reset ──
@@ -174,23 +243,7 @@ export default function HomeScreen() {
     const totalTasksCount = tasks.length;
     const taskMastery = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
-    // Mock data for the 7-day chart
-    const chartData = {
-        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-        datasets: [
-            {
-                data: [7, 8, 6, 9, 7, 8, 9], // Mood stability score (1-10)
-                color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`,
-                strokeWidth: 3
-            },
-            {
-                // Dummy dataset to force the Y-axis maximum to 10
-                data: [10],
-                withDots: false, // Hide the dot
-                color: () => 'rgba(0, 0, 0, 0)' // Make the line completely invisible
-            }
-        ]
-    };
+    // (Mock data removed, we now use chartDataState)
 
     const screenWidth = Dimensions.get('window').width;
 
@@ -471,7 +524,7 @@ export default function HomeScreen() {
                     {/* Mood Stability Chart */}
                     <View style={styles.chartWrapper}>
                         <LineChart
-                            data={chartData}
+                            data={chartDataState}
                             width={screenWidth - 64} // Responsive width
                             height={180}
                             fromZero={true}
