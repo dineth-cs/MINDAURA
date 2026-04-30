@@ -16,21 +16,42 @@ import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ChatScreen() {
     const { currentTheme, isDarkMode, name } = useContext(UserContext);
     const { userToken } = useContext(AuthContext);
-    const [messages, setMessages] = useState([
-        {
-            _id: 1,
-            text: `Hello ${name || 'there'}! ✨ I'm Aura, your wellness assistant. How are you feeling today?`,
-            createdAt: new Date(),
-            user: { _id: 2, name: 'Aura' },
-        },
-    ]);
+    const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const flatListRef = useRef();
+
+    useEffect(() => {
+        const loadMessages = async () => {
+            try {
+                const savedMessages = await AsyncStorage.getItem('auraChatHistory');
+                if (savedMessages) {
+                    setMessages(JSON.parse(savedMessages));
+                } else {
+                    setMessages([{
+                        _id: 1,
+                        text: `Hello ${name || 'there'}! ✨ I'm Aura, your wellness assistant. How are you feeling today?`,
+                        createdAt: new Date(),
+                        user: { _id: 2, name: 'Aura' },
+                    }]);
+                }
+            } catch (error) {
+                console.error('Failed to load messages', error);
+            }
+        };
+        loadMessages();
+    }, [name]);
+
+    useEffect(() => {
+        if (messages.length > 0) {
+            AsyncStorage.setItem('auraChatHistory', JSON.stringify(messages));
+        }
+    }, [messages]);
 
     const sendMessage = async () => {
         if (inputText.trim() === '') return;
@@ -48,12 +69,17 @@ export default function ChatScreen() {
         Keyboard.dismiss();
 
         try {
+            const historyForBackend = messages.map(msg => ({
+                role: msg.user._id === 1 ? 'user' : 'assistant',
+                content: msg.text
+            })).reverse();
+
             // Forced explicit URL and simplified payload to resolve 404
             const response = await axios.post(
                 'https://mindaura-wfut.onrender.com/api/chat',
                 {
                     message: inputText,
-                    history: []
+                    history: historyForBackend
                 },
                 {
                     headers: {
