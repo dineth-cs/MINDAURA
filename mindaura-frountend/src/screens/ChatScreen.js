@@ -147,7 +147,7 @@ export default function ChatScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.safeArea, { backgroundColor: currentTheme.bg }]}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: currentTheme.bg }]} edges={['top']}>
             <View style={styles.header}>
                 <View style={styles.headerInfo}>
                     <View style={styles.auraStatusCircle} />
@@ -176,7 +176,7 @@ export default function ChatScreen() {
             )}
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
                 <View style={[styles.inputWrapper, { backgroundColor: currentTheme.bg }]}>
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
         paddingHorizontal: 15,
         paddingVertical: 12,
-        paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+        paddingBottom: 15,
     },
     input: {
         flex: 1,
