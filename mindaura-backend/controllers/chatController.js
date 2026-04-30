@@ -4,35 +4,43 @@ exports.handleChat = async (req, res) => {
     try {
         console.log("=== Message Received ===", req.body.message);
 
-        const apiKey = process.env.GEMINI_API_KEY;
+        const apiKey = process.env.GROQ_API_KEY;
         if (!apiKey) {
-            return res.status(200).json({ response: "⚠️ API Key is missing in Render!" });
+            return res.status(200).json({ response: "⚠️ GROQ API Key is missing in Render!" });
         }
 
-        // Using the Pro model as requested
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`;
+        const url = 'https://api.groq.com/openai/v1/chat/completions';
         
         const payload = {
-            system_instruction: {
-                parts: [{ text: "You are Aura, a friendly, empathetic, and professional wellness and mental health assistant. Your creator is Dineth Hasaranga. Keep your answers concise, supportive, and strictly related to wellness and well-being. Use emojis occasionally." }]
-            },
-            contents: [{ parts: [{ text: req.body.message }] }]
+            model: "llama3-8b-8192", // Super fast Meta Llama 3 model
+            messages: [
+                {
+                    role: "system",
+                    content: "You are Aura, a friendly, empathetic, and professional wellness and mental health assistant. Your creator is Dineth Hasaranga. Keep your answers concise, supportive, and strictly related to wellness and well-being. Use emojis occasionally."
+                },
+                {
+                    role: "user",
+                    content: req.body.message
+                }
+            ]
         };
 
         const response = await axios.post(url, payload, {
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json' 
+            }
         });
 
-        const responseText = response.data.candidates[0].content.parts[0].text;
+        const responseText = response.data.choices[0].message.content;
         return res.status(200).json({ response: responseText });
 
     } catch (error) {
-        // Capture and send the REAL error from Google or Axios
         const errMsg = error?.response?.data?.error?.message || error.message;
-        console.error("=== API ERROR ===", errMsg);
+        console.error("=== GROQ API ERROR ===", errMsg);
         
         return res.status(200).json({ 
-            response: `⚠️ Real Error: ${errMsg}` 
+            response: `⚠️ Error: ${errMsg}` 
         });
     }
 };
