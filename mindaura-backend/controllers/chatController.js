@@ -12,7 +12,7 @@ exports.handleChat = async (req, res) => {
         const url = 'https://api.groq.com/openai/v1/chat/completions';
         
         const payload = {
-            model: "llama3-8b-8192", // Super fast Meta Llama 3 model
+            model: "llama-3.1-8b-instant", // Updated to the new active Llama 3.1 model
             messages: [
                 {
                     role: "system",
