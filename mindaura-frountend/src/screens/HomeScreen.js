@@ -449,12 +449,15 @@ export default function HomeScreen() {
                             data={chartData}
                             width={screenWidth - 64} // Responsive width
                             height={180}
+                            fromZero={true}
+                            segments={5}
                             formatYLabel={(yValue) => {
-                                const val = parseInt(yValue, 10);
-                                if (val >= 9) return `${val} 😊`;
-                                if (val >= 7) return `${val} 🧘`;
-                                if (val >= 5) return `${val} ☁️`;
-                                return `${val}`;
+                                const val = Math.round(parseFloat(yValue));
+                                if (val >= 9) return `${val} 🤩`;
+                                if (val >= 7) return `${val} 😊`;
+                                if (val >= 5) return `${val} 🧘`;
+                                if (val >= 3) return `${val} ☁️`;
+                                return `${val} 😔`;
                             }}
                             chartConfig={{
                                 backgroundColor: currentTheme.card,
