@@ -56,9 +56,12 @@ export default function HomeScreen() {
                 return true;
             };
 
-            BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            const backHandlerSubscription = BackHandler.addEventListener(
+                'hardwareBackPress',
+                onBackPress
+            );
 
-            return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+            return () => backHandlerSubscription.remove();
         }, [])
     );
 
