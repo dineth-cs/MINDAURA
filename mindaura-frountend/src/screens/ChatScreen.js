@@ -9,7 +9,8 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
-    Keyboard
+    Keyboard,
+    Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -113,6 +114,36 @@ export default function ChatScreen() {
         }
     };
 
+    const handleClearChat = () => {
+        Alert.alert(
+            "Clear Chat",
+            "Are you sure you want to delete all messages?",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Clear",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await AsyncStorage.removeItem(CHAT_STORAGE_KEY);
+                            setMessages([{
+                                _id: 1,
+                                text: `Hello ${name || 'there'}! ✨ I'm Aura, your wellness assistant. How are you feeling today?`,
+                                createdAt: new Date(),
+                                user: { _id: 2, name: 'Aura' },
+                            }]);
+                        } catch (error) {
+                            console.error('Failed to clear chat', error);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const renderItem = ({ item }) => {
         const isUser = item.user._id === 1;
         return (
@@ -155,8 +186,8 @@ export default function ChatScreen() {
                     <View style={styles.auraStatusCircle} />
                     <Text style={[styles.headerTitle, { color: currentTheme.text }]}>Aura Chat</Text>
                 </View>
-                <TouchableOpacity onPress={() => setMessages([messages[messages.length - 1]])}>
-                    <Ionicons name="refresh-outline" size={20} color={currentTheme.subText} />
+                <TouchableOpacity onPress={handleClearChat}>
+                    <Ionicons name="trash-outline" size={20} color={currentTheme.subText} />
                 </TouchableOpacity>
             </View>
 
