@@ -105,17 +105,19 @@ export default function ProfileScreen() {
     const handleLogout = async () => {
         console.log("ProfileScreen: Logout button pressed.");
         try {
+            // 1. Properly clear session
+            await AsyncStorage.removeItem('userToken');
+
             if (typeof clearUserContext === 'function') {
                 await clearUserContext();
             }
             if (typeof signOut === 'function') {
                 await signOut();
             }
-            // Explicitly reset the navigation stack to the Login screen
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-            });
+            // 2 & 3. We deliberately REMOVE navigation.reset() here to fix the crash!
+            // Because AppNavigator uses state-based routing (userToken ? App : Auth),
+            // signOut() already unmounts this stack automatically. 
+            // We've updated AuthStack's default route so it natively lands on 'Onboarding'.
         } catch (error) {
             console.error('ProfileScreen: Logout sequence failed:', error);
             Alert.alert("Logout Error", "Something went wrong while logging out.");
