@@ -160,11 +160,19 @@ export default function HomeScreen() {
     // Mock data for the 7-day chart
     const chartData = {
         labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-        datasets: [{
-            data: [7, 8, 6, 9, 7, 8, 9], // Mood stability score (1-10)
-            color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`,
-            strokeWidth: 3
-        }]
+        datasets: [
+            {
+                data: [7, 8, 6, 9, 7, 8, 9], // Mood stability score (1-10)
+                color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`,
+                strokeWidth: 3
+            },
+            {
+                // Dummy dataset to force the Y-axis maximum to 10
+                data: [10],
+                withDots: false, // Hide the dot
+                color: () => 'rgba(0, 0, 0, 0)' // Make the line completely invisible
+            }
+        ]
     };
 
     const screenWidth = Dimensions.get('window').width;
