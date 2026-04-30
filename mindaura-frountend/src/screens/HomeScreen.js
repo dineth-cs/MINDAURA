@@ -12,8 +12,10 @@ import {
     Platform,
     Linking,
     Dimensions,
+    Keyboard,
     Alert,
-    BackHandler
+    BackHandler,
+    DeviceEventEmitter
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -161,6 +163,14 @@ export default function HomeScreen() {
             loadMoodHistory();
         }, [loadStreakFromStorage, loadMoodHistory])
     );
+
+    useEffect(() => {
+        const subscription = DeviceEventEmitter.addListener('MoodUpdated', () => {
+            loadStreakFromStorage();
+            loadMoodHistory();
+        });
+        return () => subscription.remove();
+    }, [loadStreakFromStorage, loadMoodHistory]);
 
     // ── Midnight Task Reset ──
     const checkAndResetTasksAtMidnight = async (currentTasks) => {
@@ -531,6 +541,7 @@ export default function HomeScreen() {
                             segments={5}
                             formatYLabel={(yValue) => {
                                 const val = Math.round(parseFloat(yValue));
+                                if (val === 0) return '0';
                                 if (val >= 9) return `${val} 🤩`;
                                 if (val >= 7) return `${val} 😊`;
                                 if (val >= 5) return `${val} 🧘`;

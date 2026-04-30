@@ -1,6 +1,6 @@
 import React, { useState, useRef, useContext } from 'react';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Alert, StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { Alert, StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator, DeviceEventEmitter } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -115,6 +115,8 @@ export default function FaceScreen() {
 
             // ── Streak Counter Update ──
             await updateStreak();
+
+            DeviceEventEmitter.emit('MoodUpdated');
 
             navigation.navigate('RecommendationsScreen', { mood: response.data.mood || 'Happy' });
 

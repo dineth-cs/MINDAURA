@@ -11,7 +11,8 @@ import {
     Keyboard,
     ScrollView,
     ActivityIndicator,
-    Alert
+    Alert,
+    DeviceEventEmitter
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,7 @@ export default function JournalScreen() {
                     { mood: 'Happy', source: 'journal' },
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
+                DeviceEventEmitter.emit('MoodUpdated');
             }
         } catch (err) {
             console.warn('Could not save mood entry (journal):', err.message);

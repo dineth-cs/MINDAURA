@@ -6,7 +6,8 @@ import {
     TouchableOpacity,
     SafeAreaView,
     ActivityIndicator,
-    Alert
+    Alert,
+    DeviceEventEmitter
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -119,6 +120,7 @@ export default function VoiceScreen() {
                     { mood: 'Happy', source: 'voice' },
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
+                DeviceEventEmitter.emit('MoodUpdated');
             }
         } catch (err) {
             console.warn('Could not save mood entry (voice):', err.message);
