@@ -5,9 +5,15 @@ fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9   # Required for UploadFile support
 
+<<<<<<< HEAD
 # ── Machine Learning (TensorFlow CPU) ─────────
 tensorflow-cpu>=2.20.0   # CPU-only build — avoids heavy CUDA packages on Render
 numpy>=1.26.4            # TF 2.20+ will pull a compatible version automatically
+=======
+# ── Machine Learning (TensorFlow) ─────────────
+tensorflow-cpu  # 2.16.x does not support Python 3.13; use 2.20+ for Py3.13
+numpy>=1.26.4        # TF 2.20+ will pull a compatible version automatically
+>>>>>>> 916fbc73effc83bf33d507f3acd00a92e6859e5b
 
 # ── Image Processing ───────────────────────────
 opencv-python-headless>=4.9.0.80   # Headless: no GUI deps (Render-compatible)
