@@ -134,15 +134,21 @@ export default function FaceScreen() {
             }
 
             // ── Step 2: Save the detected mood to the main backend ──
-            const saveResponse = await axios.post(
-                API_ENDPOINTS.EMOTION.SAVE,
-                { mood: detectedMood, source: 'face' },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            console.log('Mood saved:', saveResponse.data);
+            // Isolated in its own try-catch — a DB failure must never block the result UI.
+            try {
+                const saveResponse = await axios.post(
+                    API_ENDPOINTS.EMOTION.SAVE,
+                    { mood: detectedMood, source: 'face' },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                console.log('Mood saved:', saveResponse.data);
+                await updateStreak();
+                DeviceEventEmitter.emit('MoodUpdated');
+            } catch (saveErr) {
+                console.warn('DB save failed (non-blocking):', saveErr.message);
+            }
 
-            await updateStreak();
-            DeviceEventEmitter.emit('MoodUpdated');
+            // Always navigate, regardless of DB save outcome
             navigation.navigate('RecommendationsScreen', { mood: detectedMood });
 
         } catch (err) {

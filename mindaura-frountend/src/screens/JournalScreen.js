@@ -116,19 +116,25 @@ export default function JournalScreen() {
             }
 
             // ── Step 2: Save the detected mood to the main backend ──
-            await axios.post(
-                API_ENDPOINTS.EMOTION.SAVE,
-                { mood: detectedMood, source: 'journal', text: journalText.trim() },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            await updateStreak();
-            DeviceEventEmitter.emit('MoodUpdated');
+            // Isolated in its own try-catch — a DB failure must never block the result UI.
+            try {
+                await axios.post(
+                    API_ENDPOINTS.EMOTION.SAVE,
+                    { mood: detectedMood, source: 'journal', text: journalText.trim() },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                await updateStreak();
+                DeviceEventEmitter.emit('MoodUpdated');
+            } catch (saveErr) {
+                console.warn('DB save failed (non-blocking):', saveErr.message);
+            }
+
+            // Always navigate, regardless of DB save outcome
             navigation.navigate('RecommendationsScreen', { mood: detectedMood });
 
         } catch (err) {
             console.error('Journal analysis error:', err.message);
             Alert.alert('Error', err.message || 'Something went wrong. Please try again.');
-            setDetectedMood(null);
         } finally {
             setIsAnalyzing(false);
         }
