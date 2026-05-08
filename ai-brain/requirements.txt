@@ -5,9 +5,9 @@ fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9   # Required for UploadFile support
 
-# ── Machine Learning (TensorFlow) ─────────────
-tensorflow>=2.20.0   # 2.16.x does not support Python 3.13; use 2.20+ for Py3.13
-numpy>=1.26.4        # TF 2.20+ will pull a compatible version automatically
+# ── Machine Learning (TensorFlow CPU) ─────────
+tensorflow-cpu>=2.20.0   # CPU-only build — avoids heavy CUDA packages on Render
+numpy>=1.26.4            # TF 2.20+ will pull a compatible version automatically
 
 # ── Image Processing ───────────────────────────
 opencv-python-headless>=4.9.0.80   # Headless: no GUI deps (Render-compatible)
@@ -18,7 +18,8 @@ soundfile>=0.12.1   # Backend codec used by librosa
 
 # ── NLP / Text Model (HuggingFace RoBERTa) ────
 transformers>=4.41.0
-torch>=2.6.0           # 2.3.0 has no Python 3.13 build; 2.6.0+ required
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.6.0           # CPU-only wheel fetched via extra-index-url above
 safetensors>=0.4.3     # Required for loading model.safetensors weights
 
 # ── HTTP Client (optional) ────────────────────

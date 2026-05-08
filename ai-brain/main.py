@@ -9,24 +9,11 @@ import uvicorn
 import os
 import io
 import tempfile
+import threading
 # pyrefly: ignore [missing-import]
 import numpy as np
 # pyrefly: ignore [missing-import]
 import cv2
-
-# TensorFlow / Keras
-import tensorflow as tf
-from tensorflow.keras.models import load_model
-
-# HuggingFace Transformers (for RoBERTa text model)
-# pyrefly: ignore [missing-import]
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-# pyrefly: ignore [missing-import]
-import torch
-
-# Audio processing
-# pyrefly: ignore [missing-import]
-import librosa
 
 # ──────────────────────────────────────────────
 # App Setup
@@ -43,36 +30,25 @@ app.add_middleware(
 # ──────────────────────────────────────────────
 # Model Paths
 # ──────────────────────────────────────────────
-FACE_MODEL_PATH  = "../Models/MindAura_Face_Model_5_Moods/mindaura_face_model_5_moods.keras"
-VOICE_MODEL_PATH = "../Models/MindAura_Voice_Sniper_Model/mindaura_voice_sniper_model.h5"
+FACE_MODEL_PATH    = "../Models/MindAura_Face_Model_5_Moods/mindaura_face_model_5_moods.keras"
+VOICE_MODEL_PATH   = "../Models/MindAura_Voice_Sniper_Model/mindaura_voice_sniper_model.h5"
 VOICE_CLASSES_PATH = "../Models/MindAura_Voice_Sniper_Model/mindaura_voice_classes.npy"
-TEXT_MODEL_PATH  = "../Models/mindaura_text_final_85_model"
+TEXT_MODEL_PATH    = "../Models/mindaura_text_final_85_model"
 
 # ──────────────────────────────────────────────
-# Load Face Model
+# Global State — set to True once all models load
 # ──────────────────────────────────────────────
-print("🧠 Loading Face AI Model...")
-face_model = load_model(FACE_MODEL_PATH)
+models_ready = False
+
+face_model      = None
 face_mood_names = ['Stressed', 'Happy', 'Sad', 'Bored', 'Energized']
-print("✅ Face Model Loaded Successfully!")
 
-# ──────────────────────────────────────────────
-# Load Voice Model
-# ──────────────────────────────────────────────
-print("🎙️ Loading Voice AI Model...")
-voice_model = load_model(VOICE_MODEL_PATH)
-voice_classes = np.load(VOICE_CLASSES_PATH, allow_pickle=True)
-print(f"✅ Voice Model Loaded! Classes: {list(voice_classes)}")
+voice_model   = None
+voice_classes = None
 
-# ──────────────────────────────────────────────
-# Load Text Model (RoBERTa via HuggingFace)
-# ──────────────────────────────────────────────
-print("📝 Loading Text AI Model (RoBERTa)...")
-text_tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_PATH)
-text_model = AutoModelForSequenceClassification.from_pretrained(TEXT_MODEL_PATH)
-text_model.eval()  # Set to inference mode
+text_tokenizer = None
+text_model     = None
 
-# Map model label IDs → mood names (5 classes matching training order)
 TEXT_LABEL_MAP = {
     0: "Stressed",
     1: "Happy",
@@ -80,7 +56,53 @@ TEXT_LABEL_MAP = {
     3: "Bored",
     4: "Energized"
 }
-print("✅ Text Model Loaded Successfully!")
+
+
+# ──────────────────────────────────────────────
+# Background Model Loader
+# ──────────────────────────────────────────────
+def load_all_models():
+    global models_ready
+    global face_model
+    global voice_model, voice_classes
+    global text_tokenizer, text_model
+
+    try:
+        # Import heavy libraries only inside the thread so the server
+        # can bind and respond to the health check before they finish loading.
+        from tensorflow.keras.models import load_model as tf_load_model
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        import torch
+        import librosa  # noqa: F401 — imported here to avoid slow startup
+
+        # ── Face Model ──────────────────────────────
+        print("🧠 Loading Face AI Model...")
+        face_model = tf_load_model(FACE_MODEL_PATH)
+        print("✅ Face Model Loaded Successfully!")
+
+        # ── Voice Model ─────────────────────────────
+        print("🎙️ Loading Voice AI Model...")
+        voice_model   = tf_load_model(VOICE_MODEL_PATH)
+        voice_classes = np.load(VOICE_CLASSES_PATH, allow_pickle=True)
+        print(f"✅ Voice Model Loaded! Classes: {list(voice_classes)}")
+
+        # ── Text Model (RoBERTa) ─────────────────────
+        print("📝 Loading Text AI Model (RoBERTa)...")
+        text_tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_PATH)
+        text_model     = AutoModelForSequenceClassification.from_pretrained(TEXT_MODEL_PATH)
+        text_model.eval()
+        print("✅ Text Model Loaded Successfully!")
+
+        models_ready = True
+        print("🚀 All models ready — accepting prediction requests.")
+
+    except Exception as e:
+        print(f"❌ Model loading failed: {e}")
+        # models_ready stays False; endpoints will continue returning 503
+
+
+# Start loading in background immediately after app initialisation
+threading.Thread(target=load_all_models, daemon=True).start()
 
 
 # ──────────────────────────────────────────────
@@ -91,10 +113,23 @@ class TextRequest(BaseModel):
 
 
 # ──────────────────────────────────────────────
+# Helper: guard prediction endpoints
+# ──────────────────────────────────────────────
+def require_models():
+    if not models_ready:
+        raise HTTPException(
+            status_code=503,
+            detail="Models are still loading. Please try again in a moment."
+        )
+
+
+# ──────────────────────────────────────────────
 # Health Check
 # ──────────────────────────────────────────────
 @app.get("/")
 def read_root():
+    if not models_ready:
+        return {"message": "MindAura AI Backend is warming up... 🔥 Models loading, please wait."}
     return {"message": "MindAura AI Backend is Running! 🚀"}
 
 
@@ -103,6 +138,7 @@ def read_root():
 # ──────────────────────────────────────────────
 @app.post("/predict-face")
 async def predict_face(file: UploadFile = File(...)):
+    require_models()
     try:
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
@@ -137,7 +173,9 @@ async def predict_face(file: UploadFile = File(...)):
 # ──────────────────────────────────────────────
 @app.post("/predict-voice")
 async def predict_voice(file: UploadFile = File(...)):
+    require_models()
     try:
+        import librosa  # available after background thread imported it
         contents = await file.read()
 
         # Write to a temp file so librosa can read it
@@ -180,7 +218,10 @@ async def predict_voice(file: UploadFile = File(...)):
 # ──────────────────────────────────────────────
 @app.post("/predict-text")
 async def predict_text(request: TextRequest):
+    require_models()
     try:
+        import torch  # available after background thread imported it
+
         if not request.text.strip():
             raise HTTPException(status_code=400, detail="Text input cannot be empty.")
 
