@@ -6,7 +6,7 @@ uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9   # Required for UploadFile support
 
 # ── Machine Learning (TensorFlow) ─────────────
-tensorflow>=2.20.0   # 2.16.x does not support Python 3.13; use 2.20+ for Py3.13
+tensorflow-cpu  # 2.16.x does not support Python 3.13; use 2.20+ for Py3.13
 numpy>=1.26.4        # TF 2.20+ will pull a compatible version automatically
 
 # ── Image Processing ───────────────────────────
