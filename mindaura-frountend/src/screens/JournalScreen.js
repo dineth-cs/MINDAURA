@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
+import { AI_BASE_URL, API_ENDPOINTS } from '../config/api';
 
 export default function JournalScreen() {
     const navigation = useNavigation();
@@ -75,7 +76,7 @@ export default function JournalScreen() {
 
     const handleAnalyzeMood = async () => {
         if (journalText.trim() === '') {
-            Alert.alert("Input Required", "Please pour your thoughts into the journal before analyzing!");
+            Alert.alert('Input Required', 'Please pour your thoughts into the journal before analyzing!');
             return;
         }
         Keyboard.dismiss();
@@ -83,21 +84,53 @@ export default function JournalScreen() {
         setDetectedMood('Analyzing...');
         try {
             const token = await AsyncStorage.getItem('userToken');
-            if (token) {
-                await axios.post(
-                    'https://mindaura-wfut.onrender.com/api/emotion/save',
-                    { mood: 'Happy', source: 'journal' },
-                    { headers: { Authorization: `Bearer ${token}` } }
+            if (!token) throw new Error('Authentication token missing.');
+
+            // ── Step 1: Call AI backend to detect emotion from text ──
+            let detectedMood = 'Happy'; // fallback
+            let confidence = '';
+            try {
+                const aiResponse = await fetch(`${AI_BASE_URL}/predict-text`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: journalText.trim() }),
+                });
+                if (aiResponse.status === 503) {
+                    Alert.alert('AI Warming Up', 'The AI model is still loading. Please try again in a moment.');
+                    setDetectedMood(null);
+                    return;
+                }
+                if (!aiResponse.ok) throw new Error(`AI server error: ${aiResponse.status}`);
+                const aiData = await aiResponse.json();
+                console.log('AI Text Result:', aiData);
+                detectedMood = aiData.emotion || 'Happy';
+                confidence = aiData.confidence || '';
+                setDetectedMood(`${detectedMood}${confidence ? ' (' + confidence + ')' : ''}`);
+            } catch (aiErr) {
+                console.warn('AI backend unreachable, using fallback mood:', aiErr.message);
+                Alert.alert(
+                    'AI Unavailable',
+                    'Could not reach the AI server. Saving with a default mood.\n\nError: ' + aiErr.message
                 );
-                await updateStreak();
-                DeviceEventEmitter.emit('MoodUpdated');
+                setDetectedMood(detectedMood);
             }
+
+            // ── Step 2: Save the detected mood to the main backend ──
+            await axios.post(
+                API_ENDPOINTS.EMOTION.SAVE,
+                { mood: detectedMood, source: 'journal', text: journalText.trim() },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            await updateStreak();
+            DeviceEventEmitter.emit('MoodUpdated');
+            navigation.navigate('RecommendationsScreen', { mood: detectedMood });
+
         } catch (err) {
-            console.warn('Could not save mood entry (journal):', err.message);
+            console.error('Journal analysis error:', err.message);
+            Alert.alert('Error', err.message || 'Something went wrong. Please try again.');
+            setDetectedMood(null);
         } finally {
             setIsAnalyzing(false);
-            setDetectedMood('Happy');
-            navigation.navigate('RecommendationsScreen', { mood: 'Happy' });
         }
     };
 

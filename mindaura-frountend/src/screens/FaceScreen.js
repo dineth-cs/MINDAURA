@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
+import { AI_BASE_URL, API_ENDPOINTS } from '../config/api';
 
 export default function FaceScreen() {
     const navigation = useNavigation();
@@ -98,52 +99,64 @@ export default function FaceScreen() {
         setIsAnalyzing(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
-            if (!token) throw new Error("Authentication token missing.");
-            if (!capturedBase64) throw new Error("No image data found.");
+            if (!token) throw new Error('Authentication token missing.');
+            if (!photo) throw new Error('No image captured.');
 
-            const response = await axios.post(
-                'https://mindaura-wfut.onrender.com/api/emotion/save',
-                { 
-                    mood: 'Happy', 
-                    source: 'face',
-                    image: capturedBase64 
-                },
+            // ── Step 1: Call AI backend to detect emotion from face ──
+            const formData = new FormData();
+            formData.append('file', {
+                uri: photo,
+                name: 'face.jpg',
+                type: 'image/jpeg',
+            });
+
+            let detectedMood = 'Happy'; // fallback
+            try {
+                const aiResponse = await fetch(`${AI_BASE_URL}/predict-face`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                if (aiResponse.status === 503) {
+                    Alert.alert('AI Warming Up', 'The AI model is still loading. Please try again in a moment.');
+                    return;
+                }
+                if (!aiResponse.ok) throw new Error(`AI server error: ${aiResponse.status}`);
+                const aiData = await aiResponse.json();
+                console.log('AI Face Result:', aiData);
+                detectedMood = aiData.emotion || 'Happy';
+            } catch (aiErr) {
+                console.warn('AI backend unreachable, using fallback mood:', aiErr.message);
+                Alert.alert(
+                    'AI Unavailable',
+                    'Could not reach the AI server. Saving with a default mood.\n\nError: ' + aiErr.message
+                );
+            }
+
+            // ── Step 2: Save the detected mood to the main backend ──
+            const saveResponse = await axios.post(
+                API_ENDPOINTS.EMOTION.SAVE,
+                { mood: detectedMood, source: 'face' },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
+            console.log('Mood saved:', saveResponse.data);
 
-            console.log("Analysis successful:", response.data);
-
-            // ── Streak Counter Update ──
             await updateStreak();
-
             DeviceEventEmitter.emit('MoodUpdated');
-
-            navigation.navigate('RecommendationsScreen', { mood: response.data.mood || 'Happy' });
+            navigation.navigate('RecommendationsScreen', { mood: detectedMood });
 
         } catch (err) {
             if (err.response) {
                 const status = err.response.status;
                 const data = err.response.data;
-
                 if (status === 400) {
-                    // Face detection rejection from AI
-                    const reason = data.message || 'No human face clearly detected.';
-                    Alert.alert('Face Not Detected', reason);
-                    setPhoto(null);
-                    setCapturedBase64(null);
-                } else if (status === 500 && data.details) {
-                    // Raw API error — show exact details for debugging
-                    Alert.alert(
-                        `Debug Error (${status})`,
-                        data.details
-                    );
+                    Alert.alert('Face Not Detected', data.message || 'No human face clearly detected.');
                     setPhoto(null);
                     setCapturedBase64(null);
                 } else {
                     Alert.alert('Error', data.message || 'Something went wrong. Please try again.');
                 }
             } else {
-                // Network or unexpected client-side error
                 console.error('Unexpected error:', err.message);
                 Alert.alert('Connection Error', err.message || 'Could not reach the server.');
             }

@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
+import { AI_BASE_URL, API_ENDPOINTS } from '../config/api';
 
 export default function VoiceScreen() {
     const navigation = useNavigation();
@@ -142,30 +143,64 @@ export default function VoiceScreen() {
 
     const handleAnalyzeVoice = async () => {
         if (!recordingUri && !isRecording) {
-            Alert.alert("Recording Required", "Please record your voice first so we can analyze it!");
+            Alert.alert('Recording Required', 'Please record your voice first so we can analyze it!');
             return;
         }
         if (isRecording) {
-            console.log("Analyzing Voice... Please stop recording first.");
+            Alert.alert('Still Recording', 'Please stop the recording before analyzing.');
             return;
         }
         setIsAnalyzing(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
-            if (token) {
-                await axios.post(
-                    'https://mindaura-wfut.onrender.com/api/emotion/save',
-                    { mood: 'Happy', source: 'voice' },
-                    { headers: { Authorization: `Bearer ${token}` } }
+            if (!token) throw new Error('Authentication token missing.');
+
+            // ── Step 1: Call AI backend to detect emotion from voice ──
+            const formData = new FormData();
+            formData.append('file', {
+                uri: recordingUri,
+                name: 'voice.wav',
+                type: 'audio/wav',
+            });
+
+            let detectedMood = 'Happy'; // fallback
+            try {
+                const aiResponse = await fetch(`${AI_BASE_URL}/predict-voice`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                if (aiResponse.status === 503) {
+                    Alert.alert('AI Warming Up', 'The AI model is still loading. Please try again in a moment.');
+                    return;
+                }
+                if (!aiResponse.ok) throw new Error(`AI server error: ${aiResponse.status}`);
+                const aiData = await aiResponse.json();
+                console.log('AI Voice Result:', aiData);
+                detectedMood = aiData.emotion || 'Happy';
+            } catch (aiErr) {
+                console.warn('AI backend unreachable, using fallback mood:', aiErr.message);
+                Alert.alert(
+                    'AI Unavailable',
+                    'Could not reach the AI server. Saving with a default mood.\n\nError: ' + aiErr.message
                 );
-                await updateStreak();
-                DeviceEventEmitter.emit('MoodUpdated');
             }
+
+            // ── Step 2: Save the detected mood to the main backend ──
+            await axios.post(
+                API_ENDPOINTS.EMOTION.SAVE,
+                { mood: detectedMood, source: 'voice' },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            await updateStreak();
+            DeviceEventEmitter.emit('MoodUpdated');
+            navigation.navigate('RecommendationsScreen', { mood: detectedMood });
+
         } catch (err) {
-            console.warn('Could not save mood entry (voice):', err.message);
+            console.error('Voice analysis error:', err.message);
+            Alert.alert('Error', err.message || 'Something went wrong. Please try again.');
         } finally {
             setIsAnalyzing(false);
-            navigation.navigate('RecommendationsScreen', { mood: 'Happy' });
         }
     };
 
