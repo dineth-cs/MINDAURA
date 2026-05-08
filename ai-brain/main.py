@@ -71,8 +71,11 @@ def load_all_models():
         # Import heavy libraries only inside the thread so the server
         # can bind and respond to the health check before they finish loading.
         from tensorflow.keras.models import load_model as tf_load_model
+        # pyrefly: ignore [missing-import]
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        # pyrefly: ignore [missing-import]
         import torch
+        # pyrefly: ignore [missing-import]
         import librosa  # noqa: F401 — imported here to avoid slow startup
 
         # ── Face Model ──────────────────────────────
@@ -175,6 +178,7 @@ async def predict_face(file: UploadFile = File(...)):
 async def predict_voice(file: UploadFile = File(...)):
     require_models()
     try:
+        # pyrefly: ignore [missing-import]
         import librosa  # available after background thread imported it
         contents = await file.read()
 
@@ -220,6 +224,7 @@ async def predict_voice(file: UploadFile = File(...)):
 async def predict_text(request: TextRequest):
     require_models()
     try:
+        # pyrefly: ignore [missing-import]
         import torch  # available after background thread imported it
 
         if not request.text.strip():
