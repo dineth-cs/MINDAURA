@@ -116,7 +116,10 @@ export default function FaceScreen() {
                 const aiResponse = await fetch(API_ENDPOINTS.AI.FACE_EMOTION, {
                     method: 'POST',
                     body: formData,
-                    headers: { 'Content-Type': 'multipart/form-data' },
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        'Bypass-Tunnel-Reminder': 'true',  // bypass Localtunnel warning page
+                    },
                 });
                 if (aiResponse.status === 503) {
                     Alert.alert('AI Warming Up', 'The AI model is still loading. Please try again in a moment.');
