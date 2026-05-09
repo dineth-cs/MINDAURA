@@ -177,8 +177,16 @@ export default function VoiceScreen() {
                 }
                 if (!aiResponse.ok) throw new Error(`AI server error: ${aiResponse.status}`);
                 const aiData = await aiResponse.json();
-                console.log('AI Voice Result:', aiData);
-                detectedMood = aiData.emotion || 'Happy';
+
+                // Log the full multimodal breakdown for debugging
+                console.log('🎙️ Multimodal Voice Result:', JSON.stringify(aiData, null, 2));
+                if (aiData.transcribed_text) {
+                    console.log(`🗣️ Heard: "${aiData.transcribed_text}"`);
+                    console.log(`🔊 Acoustic: ${aiData.voice_only_prediction} | 📝 Linguistic: ${aiData.text_only_prediction}`);
+                }
+
+                // Use final_emotion (fused result) — fall back to emotion for older server versions
+                detectedMood = aiData.final_emotion || aiData.emotion || 'Happy';
                 detectedConfidence = aiData.confidence || null;
             } catch (aiErr) {
                 console.warn('AI backend unreachable, using fallback mood:', aiErr.message);
