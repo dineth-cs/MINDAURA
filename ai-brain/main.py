@@ -120,7 +120,12 @@ async def predict_face(file: UploadFile = File(...)):
 async def predict_voice(file: UploadFile = File(...)):
     """
     Accepts an audio file upload (WAV/M4A/any librosa-compatible format).
-    Converts to a Mel-Spectrogram image (224x224 RGB), applies VGG16 preprocess_input.
+    Replicates the Kaggle training pipeline:
+      1. Silence trimming (top_db=20)
+      2. Fixed 3-second duration (pad / truncate)
+      3. Mel-Spectrogram → dB → uint8
+      4. Viridis colormap (BGR via OpenCV) → convert to RGB
+      5. Resize to 224x224, VGG16 preprocess_input
     Returns: { type, emotion, confidence }
     """
     if not models_ready:
@@ -138,21 +143,40 @@ async def predict_voice(file: UploadFile = File(...)):
             tmp.write(contents)
             tmp_path = tmp.name
 
-        # Load audio with librosa
+        # ── Step 1: Load audio ───────────────────────────────────────────────
         audio, sr = librosa.load(tmp_path, sr=22050, mono=True)
 
-        # Generate Mel-Spectrogram (128 mels, hop 512) → power to dB
+        # ── Step 2: Trim silence (matches Kaggle training) ───────────────────
+        audio, _ = librosa.effects.trim(audio, top_db=20)
+
+        # ── Step 3: Enforce exactly 3 seconds (66150 samples @ 22050 Hz) ────
+        target_length = 3 * sr  # 66150
+        if len(audio) < target_length:
+            # Pad with zeros at the end
+            audio = np.pad(audio, (0, target_length - len(audio)), mode="constant")
+        else:
+            # Truncate to exactly 3 seconds
+            audio = audio[:target_length]
+
+        # ── Step 4: Mel-Spectrogram → power to dB ───────────────────────────
         mel_spec = librosa.feature.melspectrogram(y=audio, sr=sr, n_mels=128, hop_length=512)
         mel_db = librosa.power_to_db(mel_spec, ref=np.max)
 
-        # Normalise to [0, 255] and convert to uint8 for image processing
-        mel_norm = ((mel_db - mel_db.min()) / (mel_db.max() - mel_db.min() + 1e-8) * 255).astype(np.uint8)
+        # ── Step 5: Normalise to [0, 255] uint8 ─────────────────────────────
+        mel_norm = (
+            (mel_db - mel_db.min()) / (mel_db.max() - mel_db.min() + 1e-8) * 255
+        ).astype(np.uint8)
 
-        # Convert single-channel spectrogram to 3-channel RGB image sized 224x224
-        mel_rgb = cv2.cvtColor(mel_norm, cv2.COLOR_GRAY2RGB)
+        # ── Step 6: Apply Viridis colormap (OpenCV returns BGR) ─────────────
+        mel_viridis_bgr = cv2.applyColorMap(mel_norm, cv2.COLORMAP_VIRIDIS)
+
+        # ── Step 7: BGR → RGB (match Kaggle matplotlib Viridis output) ──────
+        mel_rgb = cv2.cvtColor(mel_viridis_bgr, cv2.COLOR_BGR2RGB)
+
+        # ── Step 8: Resize to 224x224 for VGG16 ─────────────────────────────
         mel_resized = cv2.resize(mel_rgb, (224, 224))
 
-        # VGG16 preprocessing
+        # ── Step 9: VGG16 preprocess_input ──────────────────────────────────
         img_array = np.expand_dims(mel_resized.astype("float32"), axis=0)
         img_preprocessed = preprocess_input(img_array)
 
