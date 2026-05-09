@@ -29,5 +29,9 @@ export const API_ENDPOINTS = {
     },
     SUPPORT: {
         BASE: `${API_URL}/api/support`,
+    },
+    AI: {
+        FACE_EMOTION: `${AI_BASE_URL}/predict/face`,
+        VOICE_EMOTION: `${AI_BASE_URL}/predict/voice`,
     }
 };

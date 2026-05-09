@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
-import { AI_BASE_URL, API_ENDPOINTS } from '../config/api';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function VoiceScreen() {
     const navigation = useNavigation();
@@ -164,8 +164,9 @@ export default function VoiceScreen() {
             });
 
             let detectedMood = 'Happy'; // fallback
+            let detectedConfidence = null;
             try {
-                const aiResponse = await fetch(`${AI_BASE_URL}/predict-voice`, {
+                const aiResponse = await fetch(API_ENDPOINTS.AI.VOICE_EMOTION, {
                     method: 'POST',
                     body: formData,
                     headers: { 'Content-Type': 'multipart/form-data' },
@@ -178,6 +179,7 @@ export default function VoiceScreen() {
                 const aiData = await aiResponse.json();
                 console.log('AI Voice Result:', aiData);
                 detectedMood = aiData.emotion || 'Happy';
+                detectedConfidence = aiData.confidence || null;
             } catch (aiErr) {
                 console.warn('AI backend unreachable, using fallback mood:', aiErr.message);
                 Alert.alert(

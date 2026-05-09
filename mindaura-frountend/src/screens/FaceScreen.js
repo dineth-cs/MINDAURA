@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
-import { AI_BASE_URL, API_ENDPOINTS } from '../config/api';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function FaceScreen() {
     const navigation = useNavigation();
@@ -111,8 +111,9 @@ export default function FaceScreen() {
             });
 
             let detectedMood = 'Happy'; // fallback
+            let detectedConfidence = null;
             try {
-                const aiResponse = await fetch(`${AI_BASE_URL}/predict-face`, {
+                const aiResponse = await fetch(API_ENDPOINTS.AI.FACE_EMOTION, {
                     method: 'POST',
                     body: formData,
                     headers: { 'Content-Type': 'multipart/form-data' },
@@ -125,6 +126,7 @@ export default function FaceScreen() {
                 const aiData = await aiResponse.json();
                 console.log('AI Face Result:', aiData);
                 detectedMood = aiData.emotion || 'Happy';
+                detectedConfidence = aiData.confidence || null;
             } catch (aiErr) {
                 console.warn('AI backend unreachable, using fallback mood:', aiErr.message);
                 Alert.alert(
