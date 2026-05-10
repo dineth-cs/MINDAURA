@@ -1,30 +1,64 @@
 # =============================================================================
-#  MindAura AI Backend — Multimodal Emotion Engine
+#  MindAura AI Backend — Multimodal Emotion Recognition Engine
+#  Version: 3.0 — Full Rewrite (RoBERTa + VGG16 Fusion)
+#
 #  Endpoints:
-#    GET  /              → health check
-#    POST /predict/face  → VGG16 face emotion (image upload)
-#    POST /predict/voice → Multimodal voice emotion (acoustic + linguistic fusion)
-#    POST /predict/text  → RoBERTa text emotion (JSON body)
+#    GET  /          → Health check (model warm-up status)
+#    POST /predict   → Multimodal voice emotion (acoustic VGG16 + linguistic RoBERTa)
+#    POST /predict/face → VGG16 face emotion (image upload, standalone)
+#    POST /predict/text → RoBERTa standalone text emotion (JSON body)
+#
+#  Fusion Strategy:
+#    • STT success  → fused_probs = 0.5 * text_probs + 0.5 * voice_probs
+#    • STT failure  → fused_probs = voice_probs  (acoustic-only fallback)
+#
+#  Emotion Classes (MUST match model training order, index 0–4):
+#    0: Neutral  1: Happy  2: Sad  3: Angry  4: Surprise
 # =============================================================================
 
+# ── Standard library ──────────────────────────────────────────────────────────
+import os
+import tempfile
+import threading
+import time
+
+# ── FastAPI / server ──────────────────────────────────────────────────────────
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
-import os
-import tempfile
 
-# pyrefly: ignore [missing-import]
-import numpy as np
-import cv2
+# ── Audio / signal processing ─────────────────────────────────────────────────
+import speech_recognition as sr
 import librosa
 import soundfile as sf
-import speech_recognition as sr
-import threading
-import time
 
-# ── FastAPI app ───────────────────────────────────────────────────────────────
-app = FastAPI(title="MindAura Multimodal AI Backend")
+# ── Numerical / image ─────────────────────────────────────────────────────────
+import numpy as np
+import cv2
+
+# ── Deep-learning frameworks ──────────────────────────────────────────────────
+#  NOTE: PyTorch and TensorFlow can coexist when each is imported in the
+#  correct order and inside the correct function scope.  We import torch at
+#  the top level so the JIT cache is initialised once.  TensorFlow is
+#  deferred to the background loader to avoid collision with PyTorch's
+#  memory allocator during the startup phase.
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+
+# =============================================================================
+#  FastAPI Application
+# =============================================================================
+app = FastAPI(
+    title="MindAura Multimodal Emotion Recognition API",
+    description=(
+        "Fuses a PyTorch RoBERTa text model and a TensorFlow/Keras VGG16 voice "
+        "model for robust, multimodal emotion recognition."
+    ),
+    version="3.0.0",
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,223 +66,264 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Global model handles ──────────────────────────────────────────────────────
-face_model      = None   # VGG16 face emotion model (.h5)
-voice_model     = None   # VGG16 acoustic voice model (.h5)
-text_tokenizer  = None   # RoBERTa tokenizer (HuggingFace)
-text_model      = None   # RoBERTa sequence classifier (HuggingFace, PyTorch)
-models_ready    = False
 
-# ── Label maps ────────────────────────────────────────────────────────────────
-MOOD_LABELS    = ['Stressed', 'Happy', 'Sad', 'Bored', 'Energized']
-TEXT_LABEL_MAP = {0: "Stressed", 1: "Happy", 2: "Sad", 3: "Bored", 4: "Energized"}
+# =============================================================================
+#  Global Model Handles  (populated once by the background loader)
+# =============================================================================
+voice_model    = None   # TensorFlow / Keras VGG16 acoustic model
+text_tokenizer = None   # HuggingFace RoBERTa tokenizer (PyTorch)
+text_model_pt  = None   # HuggingFace RoBERTa classifier (PyTorch)
+face_model     = None   # TensorFlow / Keras VGG16 face model (optional endpoint)
+models_ready   = False
 
 
-# ── Background model loader ───────────────────────────────────────────────────
+# =============================================================================
+#  Emotion Classes
+#  CRITICAL: indices MUST align with the label encoding used during training.
+#  Index → 0: Neutral | 1: Happy | 2: Sad | 3: Angry | 4: Surprise
+# =============================================================================
+EMOTION_CLASSES = ['Neutral', 'Happy', 'Sad', 'Angry', 'Surprise']
+
+# Convenience alias kept for the face endpoint
+FACE_EMOTION_CLASSES = EMOTION_CLASSES
+
+
+# =============================================================================
+#  Background Model Loader
+#  Heavy ML libraries (TF in particular) take several seconds to import.
+#  We load them in a background thread so Uvicorn can bind the port and
+#  respond to health-checks immediately (important for Render cold-starts).
+# =============================================================================
 def load_models_in_background():
-    global face_model, voice_model, text_tokenizer, text_model, models_ready
-    print("⏳ Waiting 10 seconds for Uvicorn to bind port...")
+    """Load all ML models after a short delay to let Uvicorn fully start."""
+    global voice_model, text_tokenizer, text_model_pt, face_model, models_ready
+
+    print("⏳ Waiting 10 s for Uvicorn to bind port before loading models …")
     time.sleep(10)
 
     try:
-        print("📦 Importing heavy ML libraries...")
-        from tensorflow.keras.models import load_model
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        # ── TensorFlow (must be imported AFTER PyTorch is already initialised) ──
+        print("📦 Importing TensorFlow …")
+        from tensorflow.keras.models import load_model  # type: ignore
 
-        # ── Face Model (VGG16, 224×224 RGB) ──────────────────────────────────
-        print("🧠 Loading Face Model (VGG16)...")
-        face_model = load_model("Models/mindaura_vgg16_perfect.h5")
-        print("✅ Face model loaded.")
+        # ── Voice / Acoustic Model (VGG16 trained on Mel-Spectrograms) ──────────
+        voice_model_path = "./Models/mindaura_vgg16_perfect.h5"
+        print(f"🎙️  Loading Voice Model (VGG16) from {voice_model_path} …")
+        voice_model = load_model(voice_model_path)
+        print(f"✅ Voice model loaded.  Output shape: {voice_model.output_shape}")
 
-        # ── Voice / Acoustic Model (VGG16 Mel-Spectrogram, 224×224 RGB) ──────
-        print("🎙️ Loading Voice/Acoustic Model (VGG16)...")
-        voice_model = load_model("Models/mindaura_audio_vgg16_final.h5")
-        print("✅ Voice model loaded.")
+        # ── Face Model (VGG16 trained on face images) — optional endpoint ────────
+        face_model_path = "./Models/mindaura_vgg16_perfect.h5"
+        print(f"🧠 Loading Face Model (VGG16) from {face_model_path} …")
+        face_model = load_model(face_model_path)
+        print(f"✅ Face model loaded.")
 
-        # ── Text / Linguistic Model (RoBERTa via HuggingFace, PyTorch) ───────
-        print("📝 Loading Text/Linguistic Model (RoBERTa)...")
-        text_tokenizer = AutoTokenizer.from_pretrained(
-            "./Models/mindaura_text_final_85_model"
-        )
-        text_model = AutoModelForSequenceClassification.from_pretrained(
-            "./Models/mindaura_text_final_85_model"
-        )
-        text_model.eval()
-        print("✅ Text model loaded.")
+        # ── Text / Linguistic Model (RoBERTa via HuggingFace, PyTorch backend) ───
+        roberta_path = "./Models/mindaura_roberta_mega_model"
+        print(f"📝 Loading RoBERTa Tokenizer from {roberta_path} …")
+        text_tokenizer = AutoTokenizer.from_pretrained(roberta_path)
+        print(f"📝 Loading RoBERTa Classifier from {roberta_path} …")
+        text_model_pt = AutoModelForSequenceClassification.from_pretrained(roberta_path)
+        text_model_pt.eval()   # Switch to inference mode (disables dropout)
+        print("✅ RoBERTa model loaded.")
 
         models_ready = True
-        print("🚀 All Models Loaded — Multimodal AI is Ready!")
-    except Exception as e:
-        print(f"❌ Model loading error: {e}")
+        print("🚀 All Models Loaded — MindAura Multimodal AI is Ready!")
+
+    except Exception as exc:
+        print(f"❌ Fatal model loading error: {exc}")
+        # models_ready remains False → endpoints will return 503
 
 
 @app.on_event("startup")
 def startup_event():
+    """Launch the background model-loading thread when the app starts."""
     threading.Thread(target=load_models_in_background, daemon=True).start()
 
 
-# ── Health check ──────────────────────────────────────────────────────────────
+# =============================================================================
+#  Helper: Build a 224×224 VGG16-preprocessed Mel-Spectrogram image
+# =============================================================================
+def audio_to_vgg16_input(audio_raw: np.ndarray, sample_rate: int) -> np.ndarray:
+    """
+    Convert a raw mono audio waveform into a VGG16-compatible input tensor.
+
+    Pipeline:
+      1. Resample to 22 050 Hz (training sample rate)
+      2. Trim leading/trailing silence (top_db = 20)
+      3. Pad / truncate to exactly 3 seconds
+      4. Compute Mel-Spectrogram (128 mels) → power-to-dB
+      5. Normalise to uint8 [0, 255]
+      6. Apply Viridis colormap (BGR) → convert BGR→RGB
+      7. Resize to 224×224
+      8. VGG16 preprocess_input (zero-centred per ImageNet channel stats)
+
+    Returns:
+      np.ndarray of shape (1, 224, 224, 3), dtype float32 — ready for model.predict()
+    """
+    from tensorflow.keras.applications.vgg16 import preprocess_input  # type: ignore
+
+    TARGET_SR  = 22_050
+    TARGET_LEN = 3 * TARGET_SR  # 66 150 samples
+
+    # Step 1 — Resample
+    audio_22k = librosa.resample(audio_raw, orig_sr=sample_rate, target_sr=TARGET_SR)
+
+    # Step 2 — Trim silence
+    audio_trimmed, _ = librosa.effects.trim(audio_22k, top_db=20)
+
+    # Step 3 — Pad or truncate to 3 seconds
+    if len(audio_trimmed) < TARGET_LEN:
+        audio_fixed = np.pad(audio_trimmed, (0, TARGET_LEN - len(audio_trimmed)), mode="constant")
+    else:
+        audio_fixed = audio_trimmed[:TARGET_LEN]
+
+    # Step 4 — Mel-Spectrogram → dB scale
+    mel_spec = librosa.feature.melspectrogram(
+        y=audio_fixed, sr=TARGET_SR, n_mels=128, hop_length=512
+    )
+    mel_db = librosa.power_to_db(mel_spec, ref=np.max)
+
+    # Step 5 — Normalise to [0, 255] uint8
+    mel_norm = (
+        (mel_db - mel_db.min()) / (mel_db.max() - mel_db.min() + 1e-8) * 255
+    ).astype(np.uint8)
+
+    # Step 6 — Viridis colormap (OpenCV outputs BGR) → convert to RGB
+    mel_bgr = cv2.applyColorMap(mel_norm, cv2.COLORMAP_VIRIDIS)
+    mel_rgb = cv2.cvtColor(mel_bgr, cv2.COLOR_BGR2RGB)
+
+    # Step 7 — Resize to 224×224 (VGG16 input resolution)
+    mel_resized = cv2.resize(mel_rgb, (224, 224))
+
+    # Step 8 — VGG16 preprocess_input (subtracts ImageNet channel means)
+    img_array = np.expand_dims(mel_resized.astype("float32"), axis=0)  # (1, 224, 224, 3)
+    return preprocess_input(img_array)
+
+
+# =============================================================================
+#  Helper: Run VGG16 and return a proper softmax probability vector (5 classes)
+# =============================================================================
+def vgg16_predict_probs(model, img_array: np.ndarray) -> np.ndarray:
+    """
+    Run a VGG16 Keras model and return a 5-element probability vector that
+    sums to 1.  The model's final layer may already apply softmax, but we
+    apply the stable softmax again to be safe (idempotent if already soft).
+
+    Args:
+        model:     Loaded Keras model.
+        img_array: Preprocessed input of shape (1, 224, 224, 3).
+
+    Returns:
+        np.ndarray of shape (5,) — probabilities aligned to EMOTION_CLASSES.
+    """
+    raw_pred = model.predict(img_array, verbose=0)  # shape: (1, num_classes)
+    logits   = raw_pred[0]                          # shape: (num_classes,)
+
+    # Stable softmax (handles both logits and already-softmaxed outputs)
+    exp_logits = np.exp(logits - np.max(logits))
+    probs      = exp_logits / exp_logits.sum()
+    return probs                                    # shape: (5,)
+
+
+# =============================================================================
+#  GET /  —  Health Check
+# =============================================================================
 @app.get("/")
-def read_root():
+def health_check():
+    """Returns the current warm-up status of all ML models."""
     if models_ready:
-        return {"status": "ready", "message": "MindAura Multimodal AI is Ready! 🚀"}
-    return {"status": "warming_up", "message": "Warming up models... ⏳"}
-
-
-# =============================================================================
-#  /predict/face  —  VGG16 Face Emotion
-# =============================================================================
-@app.post("/predict/face")
-async def predict_face(file: UploadFile = File(...)):
-    """
-    Accepts a JPEG/PNG image upload.
-    Pipeline: BGR decode → resize 224×224 → BGR→RGB → VGG16 preprocess_input.
-    Returns: { type, emotion, confidence }
-    """
-    if not models_ready:
-        raise HTTPException(
-            status_code=503,
-            detail="Models are still warming up. Please try again shortly.",
-        )
-    try:
-        from tensorflow.keras.applications.vgg16 import preprocess_input
-
-        contents = await file.read()
-        np_arr   = np.frombuffer(contents, np.uint8)
-        img      = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)  # BGR
-
-        if img is None:
-            raise HTTPException(status_code=400, detail="Invalid image file. Could not decode.")
-
-        img_resized     = cv2.resize(img, (224, 224))
-        img_rgb         = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
-        img_array       = np.expand_dims(img_rgb.astype("float32"), axis=0)
-        img_preprocessed = preprocess_input(img_array)
-
-        pred       = face_model.predict(img_preprocessed, verbose=0)
-        max_idx    = int(np.argmax(pred[0]))
-        confidence = float(pred[0][max_idx]) * 100
-
         return {
-            "type":       "face",
-            "emotion":    MOOD_LABELS[max_idx],
-            "confidence": f"{confidence:.1f}%",
+            "status":  "ready",
+            "message": "MindAura Multimodal AI is Ready! 🚀",
+            "models": {
+                "voice_model":  "mindaura_vgg16_perfect.h5 (TensorFlow/Keras)",
+                "text_model":   "mindaura_roberta_mega_model (PyTorch/HuggingFace)",
+            },
+            "emotion_classes": EMOTION_CLASSES,
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Face prediction failed: {str(e)}")
+    return {
+        "status":  "warming_up",
+        "message": "Models are loading … please retry in ~30 s ⏳",
+    }
 
 
 # =============================================================================
-#  /predict/voice  —  Multimodal Voice Emotion (Acoustic + Linguistic Fusion)
+#  POST /predict  —  Multimodal Voice Emotion (Primary Endpoint)
 # =============================================================================
-@app.post("/predict/voice")
-async def predict_voice(file: UploadFile = File(...)):
+@app.post("/predict")
+async def predict(file: UploadFile = File(...)):
     """
-    Multimodal pipeline that fuses two independent branches:
+    Primary multimodal endpoint.  Accepts any audio file and returns a fused
+    emotion prediction that blends acoustic (VGG16) and linguistic (RoBERTa)
+    signals.
 
-    ┌─────────────────────────────────────────────────────────────────┐
-    │  BRANCH A — Acoustic (VGG16 Mel-Spectrogram)                    │
-    │    Load audio → trim silence → pad/truncate to 3 s →            │
-    │    Mel-Spectrogram dB → Viridis colormap → resize 224×224 →     │
-    │    VGG16 preprocess_input → softmax probability vector          │
-    ├─────────────────────────────────────────────────────────────────┤
-    │  BRANCH B — Linguistic (Google STT → RoBERTa)                   │
-    │    Resample to 16 kHz → Google Web Speech API → transcribed     │
-    │    text → RoBERTa tokenizer → softmax probability vector        │
-    └─────────────────────────────────────────────────────────────────┘
-    FUSION:
-      • Text found  → fused_probs = (voice_probs + text_probs) / 2
-      • No text     → fused_probs = voice_probs  (acoustic only)
+    Fusion weights (50 / 50 equal weighting):
+      • STT succeeded → fused_probs = 0.5 * text_probs + 0.5 * voice_probs
+      • STT failed    → fused_probs = voice_probs  (acoustic-only fallback)
 
-    Returns detailed JSON with per-branch predictions + fused result.
+    Returns:
+      {
+        "transcribed_text":       "<text>" | null,
+        "final_emotion":          "<emotion string>",
+        "confidence_percentage":  <float>,
+        "voice_model_prediction": "<emotion>",
+        "text_model_prediction":  "<emotion>" | null
+      }
     """
     if not models_ready:
         raise HTTPException(
             status_code=503,
-            detail="Models are still warming up. Please try again shortly.",
+            detail="Models are still warming up. Please retry in ~30 seconds.",
         )
 
-    tmp_audio_path = None   # original audio temp file
-    tmp_stt_path   = None   # 16 kHz WAV for Speech Recognition
+    tmp_audio_path = None   # Temporary file for the original upload
+    tmp_stt_path   = None   # Temporary 16 kHz WAV for Speech Recognition
 
     try:
-        import torch
-        from tensorflow.keras.applications.vgg16 import preprocess_input
-
-        # ── Save uploaded bytes to a temp file ───────────────────────────────
+        # ── Save uploaded audio to a temporary file ───────────────────────────
         contents = await file.read()
-        suffix   = os.path.splitext(file.filename or "audio.wav")[1] or ".wav"
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        ext      = os.path.splitext(file.filename or "audio.wav")[1] or ".wav"
+
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp.write(contents)
             tmp_audio_path = tmp.name
 
-        # ── Load raw audio (keep native sample rate for STT resampling) ──────
-        audio_raw, sr_raw = librosa.load(tmp_audio_path, sr=None, mono=True)
+        # ── Load the audio once (native sample rate, mono) ────────────────────
+        audio_raw, native_sr = librosa.load(tmp_audio_path, sr=None, mono=True)
 
         # =====================================================================
-        #  BRANCH A — Acoustic: VGG16 Mel-Spectrogram Pipeline
+        #  BRANCH A — Voice Inference (TensorFlow VGG16 Mel-Spectrogram)
         # =====================================================================
+        print("🎙️  [Branch A] Running VGG16 acoustic inference …")
 
-        # A-1: Resample to 22050 Hz (training sample rate)
-        audio_22k = librosa.resample(audio_raw, orig_sr=sr_raw, target_sr=22050)
+        # Convert raw audio → VGG16-compatible 224×224 RGB spectrogram image
+        vgg_input    = audio_to_vgg16_input(audio_raw, native_sr)
+        voice_probs  = vgg16_predict_probs(voice_model, vgg_input)  # shape: (5,)
+        voice_max_idx = int(np.argmax(voice_probs))
+        voice_emotion = EMOTION_CLASSES[voice_max_idx]
 
-        # A-2: Trim silence (matches Kaggle training: top_db=20)
-        audio_trimmed, _ = librosa.effects.trim(audio_22k, top_db=20)
-
-        # A-3: Enforce exactly 3 seconds (66 150 samples @ 22050 Hz)
-        target_len = 3 * 22050
-        if len(audio_trimmed) < target_len:
-            audio_padded = np.pad(audio_trimmed, (0, target_len - len(audio_trimmed)), mode="constant")
-        else:
-            audio_padded = audio_trimmed[:target_len]
-
-        # A-4: Mel-Spectrogram → power to dB
-        mel_spec = librosa.feature.melspectrogram(
-            y=audio_padded, sr=22050, n_mels=128, hop_length=512
+        print(
+            f"✅ [Branch A] Voice → {voice_emotion} "
+            f"({voice_probs[voice_max_idx] * 100:.1f}%)"
         )
-        mel_db = librosa.power_to_db(mel_spec, ref=np.max)
-
-        # A-5: Normalise to [0, 255] uint8
-        mel_norm = (
-            (mel_db - mel_db.min()) / (mel_db.max() - mel_db.min() + 1e-8) * 255
-        ).astype(np.uint8)
-
-        # A-6: Apply Viridis colormap (OpenCV returns BGR)
-        mel_viridis_bgr = cv2.applyColorMap(mel_norm, cv2.COLORMAP_VIRIDIS)
-
-        # A-7: BGR → RGB (matches matplotlib Viridis used in Kaggle training)
-        mel_rgb = cv2.cvtColor(mel_viridis_bgr, cv2.COLOR_BGR2RGB)
-
-        # A-8: Resize to 224×224 for VGG16
-        mel_resized = cv2.resize(mel_rgb, (224, 224))
-
-        # A-9: VGG16 preprocess_input → predict → softmax probabilities
-        img_array        = np.expand_dims(mel_resized.astype("float32"), axis=0)
-        img_preprocessed = preprocess_input(img_array)
-        voice_raw_pred   = voice_model.predict(img_preprocessed, verbose=0)
-
-        # Convert logits to proper softmax probabilities (sum to 1)
-        voice_probs      = np.exp(voice_raw_pred[0]) / np.sum(np.exp(voice_raw_pred[0]))
-        voice_max_idx    = int(np.argmax(voice_probs))
-        voice_emotion    = MOOD_LABELS[voice_max_idx]
 
         # =====================================================================
-        #  BRANCH B — Linguistic: Google STT → RoBERTa
+        #  BRANCH B — Text Inference (Google STT → PyTorch RoBERTa)
         # =====================================================================
-
-        transcribed_text  = ""
-        text_emotion      = None
-        text_probs        = None
+        transcribed_text = None   # Will be set to a string if STT succeeds
+        text_emotion     = None   # Will be set to a string if RoBERTa succeeds
+        text_probs       = None   # Will be a np.ndarray (5,) if RoBERTa succeeds
 
         try:
-            # B-1: Resample to 16 kHz — required by Google Speech Recognition
-            audio_16k = librosa.resample(audio_raw, orig_sr=sr_raw, target_sr=16000)
+            print("🗣️  [Branch B] Resampling audio to 16 kHz for Google STT …")
 
-            # B-2: Write 16 kHz WAV to a temp file for speech_recognition
+            # B-1: Resample to 16 kHz (required by Google Web Speech API)
+            audio_16k = librosa.resample(audio_raw, orig_sr=native_sr, target_sr=16_000)
+
+            # B-2: Write 16-bit PCM WAV to a temp file (speech_recognition requires a file)
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_stt:
-                sf.write(tmp_stt.name, audio_16k, 16000, subtype="PCM_16")
+                sf.write(tmp_stt.name, audio_16k, 16_000, subtype="PCM_16")
                 tmp_stt_path = tmp_stt.name
 
             # B-3: Transcribe with Google Web Speech API
@@ -258,18 +333,20 @@ async def predict_voice(file: UploadFile = File(...)):
 
             try:
                 transcribed_text = recognizer.recognize_google(audio_data)
-                print(f"🗣️  STT transcription: '{transcribed_text}'")
+                print(f"📝 [Branch B] STT transcription: \"{transcribed_text}\"")
             except sr.UnknownValueError:
-                # Google could not understand the audio — graceful fallback
-                transcribed_text = ""
-                print("🔇 STT: No speech recognized. Falling back to acoustic only.")
-            except sr.RequestError as e:
-                # Network error — graceful fallback
-                transcribed_text = ""
-                print(f"🌐 STT request failed (network?): {e}. Falling back to acoustic only.")
+                # Google could not understand the audio — not an error, just no speech
+                transcribed_text = None
+                print("🔇 [Branch B] STT: No speech recognized. Falling back to acoustic only.")
+            except sr.RequestError as req_err:
+                # Network / API error — non-fatal, fall back gracefully
+                transcribed_text = None
+                print(f"🌐 [Branch B] STT request error (network?): {req_err}. Falling back to acoustic only.")
 
-            # B-4: Run RoBERTa only if we have transcribed text
-            if transcribed_text.strip():
+            # B-4: Run RoBERTa only when we have a valid transcription
+            if transcribed_text and transcribed_text.strip():
+                print("📝 [Branch B] Running RoBERTa inference on transcribed text …")
+
                 inputs = text_tokenizer(
                     transcribed_text,
                     return_tensors="pt",
@@ -277,66 +354,146 @@ async def predict_voice(file: UploadFile = File(...)):
                     max_length=512,
                     padding=True,
                 )
-                with torch.no_grad():
-                    outputs = text_model(**inputs)
 
-                # Softmax over logits → probability vector (5 classes)
-                text_probs_tensor = torch.softmax(outputs.logits, dim=-1).squeeze()
-                text_probs        = text_probs_tensor.numpy()          # shape: (5,)
+                with torch.no_grad():
+                    outputs = text_model_pt(**inputs)
+
+                # Apply softmax over the 5-class logit vector → probability distribution
+                text_probs_tensor = torch.softmax(outputs.logits, dim=-1).squeeze()  # shape: (5,)
+                text_probs        = text_probs_tensor.numpy()                         # → np.ndarray
                 text_max_idx      = int(torch.argmax(text_probs_tensor).item())
-                text_emotion      = MOOD_LABELS[text_max_idx]
-                print(f"📝 RoBERTa prediction: {text_emotion} ({text_probs[text_max_idx]*100:.1f}%)")
+                text_emotion      = EMOTION_CLASSES[text_max_idx]
+
+                print(
+                    f"✅ [Branch B] RoBERTa → {text_emotion} "
+                    f"({text_probs[text_max_idx] * 100:.1f}%)"
+                )
 
         except Exception as branch_b_err:
-            # Non-fatal — Branch B failure should never block Branch A result
-            print(f"⚠️  Branch B (linguistic) failed non-fatally: {branch_b_err}")
-            transcribed_text = ""
+            # Branch B failure must NEVER crash the endpoint — acoustic result is preserved
+            print(f"⚠️  [Branch B] Non-fatal error: {branch_b_err}")
+            transcribed_text = None
             text_probs       = None
             text_emotion     = None
 
         # =====================================================================
-        #  FUSION — Average probability vectors when text is available
+        #  MULTIMODAL FUSION  (50 / 50 Equal Weighting)
         # =====================================================================
-
-        if text_probs is not None and len(transcribed_text.strip()) > 0:
-            # Both branches succeeded → late-fusion by probability averaging
-            fused_probs = (voice_probs + text_probs) / 2.0
-            fusion_mode = "multimodal (acoustic + linguistic)"
-            print("🔀 Fusion: averaging acoustic + linguistic probability vectors.")
+        if text_probs is not None and transcribed_text and transcribed_text.strip():
+            # Both branches succeeded → fuse with equal 0.5 weight
+            fused_probs  = (np.array(text_probs) * 0.5) + (np.array(voice_probs) * 0.5)
+            fusion_label = "multimodal (acoustic 50% + linguistic 50%)"
+            print("🔀 [Fusion] Averaging acoustic + linguistic probability vectors.")
         else:
-            # No text transcribed → trust the acoustic model alone
-            fused_probs = voice_probs
-            fusion_mode = "acoustic only (no speech detected)"
-            print("🔊 Fusion: using acoustic model only (no linguistic signal).")
+            # STT failed or produced no text → rely on acoustic model alone
+            fused_probs  = np.array(voice_probs)
+            fusion_label = "acoustic-only (no speech detected or STT unavailable)"
+            print("🔊 [Fusion] Using acoustic-only probabilities (no linguistic signal).")
 
-        fused_max_idx   = int(np.argmax(fused_probs))
-        fused_emotion   = MOOD_LABELS[fused_max_idx]
-        fused_confidence = float(fused_probs[fused_max_idx]) * 100
+        # Resolve the final prediction from the fused distribution
+        final_idx        = int(np.argmax(fused_probs))
+        final_emotion    = EMOTION_CLASSES[final_idx]
+        confidence_pct   = float(fused_probs[final_idx]) * 100.0
 
-        print(f"✅ Final fused emotion: {fused_emotion} ({fused_confidence:.1f}%) via {fusion_mode}")
+        print(
+            f"🏆 [Final] Emotion: {final_emotion} | "
+            f"Confidence: {confidence_pct:.1f}% | "
+            f"Mode: {fusion_label}"
+        )
+
+        # ── Return the exact JSON structure required by the frontend ──────────
+        return {
+            "transcribed_text":       transcribed_text,           # str or null
+            "final_emotion":          final_emotion,              # str
+            "confidence_percentage":  round(confidence_pct, 2),  # float
+            "voice_model_prediction": voice_emotion,              # str
+            "text_model_prediction":  text_emotion,               # str or null
+        }
+
+    except HTTPException:
+        raise  # Re-raise FastAPI HTTP exceptions unchanged
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Multimodal prediction failed: {str(exc)}",
+        )
+
+    finally:
+        # Always clean up temporary audio files regardless of success or failure
+        for tmp_path in [tmp_audio_path, tmp_stt_path]:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+
+# =============================================================================
+#  POST /predict/voice  —  Alias kept for backward compatibility
+# =============================================================================
+@app.post("/predict/voice")
+async def predict_voice(file: UploadFile = File(...)):
+    """
+    Backward-compatible alias for POST /predict.
+    Delegates to the same multimodal pipeline.
+    """
+    return await predict(file)
+
+
+# =============================================================================
+#  POST /predict/face  —  Standalone VGG16 Face Emotion
+# =============================================================================
+@app.post("/predict/face")
+async def predict_face(file: UploadFile = File(...)):
+    """
+    Accepts a JPEG/PNG image upload and runs the VGG16 face emotion model.
+
+    Pipeline:
+      Decode bytes → resize 224×224 → BGR→RGB → VGG16 preprocess_input → predict
+
+    Returns:
+      { "type", "emotion", "confidence_percentage" }
+    """
+    if not models_ready:
+        raise HTTPException(
+            status_code=503,
+            detail="Models are still warming up. Please retry in ~30 seconds.",
+        )
+    try:
+        from tensorflow.keras.applications.vgg16 import preprocess_input  # type: ignore
+
+        contents = await file.read()
+        np_arr   = np.frombuffer(contents, np.uint8)
+        img      = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)  # BGR
+
+        if img is None:
+            raise HTTPException(status_code=400, detail="Invalid image file. Could not decode.")
+
+        # Resize → BGR→RGB → VGG16 preprocess_input
+        img_resized  = cv2.resize(img, (224, 224))
+        img_rgb      = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
+        img_array    = np.expand_dims(img_rgb.astype("float32"), axis=0)
+        img_prepared = preprocess_input(img_array)
+
+        face_probs  = vgg16_predict_probs(face_model, img_prepared)
+        max_idx     = int(np.argmax(face_probs))
+        confidence  = float(face_probs[max_idx]) * 100.0
 
         return {
-            "type":                  "multimodal_voice",
-            "transcribed_text":      transcribed_text,
-            "final_emotion":         fused_emotion,
-            "confidence":            f"{fused_confidence:.1f}%",
-            "voice_only_prediction": voice_emotion,
-            "text_only_prediction":  text_emotion if text_emotion else "N/A (no speech)",
+            "type":                   "face",
+            "emotion":                FACE_EMOTION_CLASSES[max_idx],
+            "confidence_percentage":  round(confidence, 2),
         }
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Multimodal voice prediction failed: {str(e)}")
-    finally:
-        # Always clean up temp files
-        for path in [tmp_audio_path, tmp_stt_path]:
-            if path and os.path.exists(path):
-                os.remove(path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Face prediction failed: {str(exc)}")
 
 
 # =============================================================================
-#  /predict/text  —  RoBERTa Standalone Text Emotion
+#  POST /predict/text  —  Standalone RoBERTa Text Emotion
 # =============================================================================
 class TextRequest(BaseModel):
     text: str
@@ -345,17 +502,17 @@ class TextRequest(BaseModel):
 @app.post("/predict/text")
 async def predict_text(request: TextRequest):
     """
-    Accepts a JSON body with a 'text' field.
-    Runs the RoBERTa sequence classifier directly.
-    Returns: { type, emotion, confidence }
+    Accepts a JSON body with a 'text' field and runs RoBERTa inference.
+
+    Returns:
+      { "type", "emotion", "confidence_percentage" }
     """
     if not models_ready:
         raise HTTPException(
             status_code=503,
-            detail="Models are still warming up. Please try again shortly.",
+            detail="Models are still warming up. Please retry in ~30 seconds.",
         )
     try:
-        import torch
         inputs = text_tokenizer(
             request.text,
             return_tensors="pt",
@@ -364,19 +521,24 @@ async def predict_text(request: TextRequest):
             padding=True,
         )
         with torch.no_grad():
-            outputs = text_model(**inputs)
+            outputs = text_model_pt(**inputs)
 
-        probs   = torch.softmax(outputs.logits, dim=-1).squeeze().tolist()
-        max_idx = int(torch.argmax(outputs.logits).item())
+        probs   = torch.softmax(outputs.logits, dim=-1).squeeze()
+        max_idx = int(torch.argmax(probs).item())
+
         return {
-            "type":       "text",
-            "emotion":    TEXT_LABEL_MAP.get(max_idx, "Unknown"),
-            "confidence": f"{probs[max_idx] * 100:.1f}%",
+            "type":                   "text",
+            "emotion":                EMOTION_CLASSES[max_idx],
+            "confidence_percentage":  round(float(probs[max_idx].item()) * 100, 2),
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Text prediction failed: {str(e)}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Text prediction failed: {str(exc)}")
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# =============================================================================
+#  Entry Point
+# =============================================================================
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    # PORT env-var is set by Render; defaults to 10000 for local development
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
