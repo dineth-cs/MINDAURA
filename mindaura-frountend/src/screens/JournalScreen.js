@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
-import { AI_BASE_URL, API_ENDPOINTS } from '../config/api';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function JournalScreen() {
     const navigation = useNavigation();
@@ -90,11 +90,20 @@ export default function JournalScreen() {
             let detectedMood = 'Happy'; // fallback
             let confidence = '';
             try {
-                const aiResponse = await fetch(`${AI_BASE_URL}/predict-text`, {
+                const requestPayload = { text: journalText.trim() };
+                console.log('📤 [JournalScreen] Sending to AI:', API_ENDPOINTS.AI.TEXT_EMOTION, requestPayload);
+
+                const aiResponse = await fetch(API_ENDPOINTS.AI.TEXT_EMOTION, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: journalText.trim() }),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Bypass-Tunnel-Reminder': 'true',
+                    },
+                    body: JSON.stringify(requestPayload),
                 });
+
+                console.log('📥 [JournalScreen] AI Response Status:', aiResponse.status);
+
                 if (aiResponse.status === 503) {
                     Alert.alert('AI Warming Up', 'The AI model is still loading. Please try again in a moment.');
                     setDetectedMood(null);
@@ -102,9 +111,9 @@ export default function JournalScreen() {
                 }
                 if (!aiResponse.ok) throw new Error(`AI server error: ${aiResponse.status}`);
                 const aiData = await aiResponse.json();
-                console.log('AI Text Result:', aiData);
-                detectedMood = aiData.emotion || 'Happy';
-                confidence = aiData.confidence || '';
+                console.log('✅ [JournalScreen] AI Text Result:', aiData);
+                detectedMood = aiData.final_emotion || 'Happy';
+                confidence = aiData.confidence_percentage ? `${aiData.confidence_percentage}%` : '';
                 setDetectedMood(`${detectedMood}${confidence ? ' (' + confidence + ')' : ''}`);
             } catch (aiErr) {
                 console.warn('AI backend unreachable, using fallback mood:', aiErr.message);
