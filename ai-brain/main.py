@@ -249,15 +249,24 @@ def health_check():
 
 
 # =============================================================================
-#  POST /predict  —  Multimodal Voice Emotion (Primary Endpoint)
+#  POST /predict/voice  —  Multimodal Voice Emotion (Primary Endpoint)
 # =============================================================================
-@app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+@app.post("/predict/voice")
+async def predict_voice(file: UploadFile = File(...)):
     """
-    Primary multimodal endpoint.  Accepts any audio file and returns a fused
-    emotion prediction that blends acoustic (VGG16) and linguistic (RoBERTa)
-    signals.
+    PRIMARY multimodal endpoint. Accepts any audio file and returns a fused
+    emotion prediction that blends two independent inference branches:
 
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  BRANCH A — Acoustic (TensorFlow VGG16 Mel-Spectrogram)          │
+    │    Load audio → trim silence → 3 s clip →                        │
+    │    Mel-Spectrogram dB → Viridis colormap → resize 224×224 →      │
+    │    VGG16 preprocess_input → softmax probability vector (5)       │
+    ├──────────────────────────────────────────────────────────────────┤
+    │  BRANCH B — Linguistic (Google STT → PyTorch RoBERTa)            │
+    │    Resample 16 kHz → Google Web Speech API → transcribed text →  │
+    │    RoBERTa tokenizer → softmax probability vector (5)            │
+    └──────────────────────────────────────────────────────────────────┘
     Fusion weights (50 / 50 equal weighting):
       • STT succeeded → fused_probs = 0.5 * text_probs + 0.5 * voice_probs
       • STT failed    → fused_probs = voice_probs  (acoustic-only fallback)
@@ -430,15 +439,14 @@ async def predict(file: UploadFile = File(...)):
 
 
 # =============================================================================
-#  POST /predict/voice  —  Alias kept for backward compatibility
+#  POST /predict  —  Backward-compatible alias for /predict/voice
 # =============================================================================
-@app.post("/predict/voice")
-async def predict_voice(file: UploadFile = File(...)):
+@app.post("/predict")
+async def predict(file: UploadFile = File(...)):
     """
-    Backward-compatible alias for POST /predict.
-    Delegates to the same multimodal pipeline.
+    Backward-compatible alias — delegates to the primary /predict/voice pipeline.
     """
-    return await predict(file)
+    return await predict_voice(file)
 
 
 # =============================================================================
@@ -502,35 +510,70 @@ class TextRequest(BaseModel):
 @app.post("/predict/text")
 async def predict_text(request: TextRequest):
     """
-    Accepts a JSON body with a 'text' field and runs RoBERTa inference.
+    TEXT-ONLY endpoint. Accepts a JSON body { "text": "..." } and runs the
+    PyTorch RoBERTa classifier directly — no audio, no STT, no VGG16.
+
+    Pipeline:
+      Raw text → RoBERTa tokenizer → model logits → torch.softmax → argmax
 
     Returns:
-      { "type", "emotion", "confidence_percentage" }
+      {
+        "final_emotion":          "<emotion string>",
+        "confidence_percentage":  <float>,
+        "text_model_prediction":  "<emotion string>",
+        "emotion_classes":        ["Neutral", "Happy", "Sad", "Angry", "Surprise"],
+        "all_probabilities":      { "Neutral": <float>, ... }   // each 0.0–100.0
+      }
     """
     if not models_ready:
         raise HTTPException(
             status_code=503,
             detail="Models are still warming up. Please retry in ~30 seconds.",
         )
+    if not request.text or not request.text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="The 'text' field must be a non-empty string.",
+        )
     try:
+        # Tokenise the input text for RoBERTa
         inputs = text_tokenizer(
-            request.text,
+            request.text.strip(),
             return_tensors="pt",
             truncation=True,
             max_length=512,
             padding=True,
         )
+
+        # Forward pass — no gradient tracking needed during inference
         with torch.no_grad():
             outputs = text_model_pt(**inputs)
 
-        probs   = torch.softmax(outputs.logits, dim=-1).squeeze()
-        max_idx = int(torch.argmax(probs).item())
+        # Apply softmax over the 5-class logit vector → probability distribution
+        probs_tensor = torch.softmax(outputs.logits, dim=-1).squeeze()  # shape: (5,)
+        probs_list   = probs_tensor.tolist()                             # Python list of 5 floats
+        max_idx      = int(torch.argmax(probs_tensor).item())
+        final_emotion = EMOTION_CLASSES[max_idx]
+        confidence    = round(probs_list[max_idx] * 100, 2)
+
+        print(
+            f"✅ [/predict/text] RoBERTa → {final_emotion} ({confidence}%) "
+            f"| Input: \"{request.text.strip()[:80]}\""
+        )
 
         return {
-            "type":                   "text",
-            "emotion":                EMOTION_CLASSES[max_idx],
-            "confidence_percentage":  round(float(probs[max_idx].item()) * 100, 2),
+            "final_emotion":          final_emotion,
+            "confidence_percentage":  confidence,
+            "text_model_prediction":  final_emotion,
+            "emotion_classes":        EMOTION_CLASSES,
+            "all_probabilities":      {
+                label: round(prob * 100, 2)
+                for label, prob in zip(EMOTION_CLASSES, probs_list)
+            },
         }
+
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Text prediction failed: {str(exc)}")
 

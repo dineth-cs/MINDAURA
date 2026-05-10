@@ -4,7 +4,7 @@
 export const API_URL = 'https://mindaura-wfut.onrender.com';
 
 // 🧠 AI Model Backend (LocalTunnel - Update this link daily when you start the laptop server)
-export const AI_BASE_URL = 'https://clear-coats-shop.loca.lt';
+export const AI_BASE_URL = 'https://cruel-fans-carry.loca.lt';
 
 export const API_ENDPOINTS = {
     AUTH: {
