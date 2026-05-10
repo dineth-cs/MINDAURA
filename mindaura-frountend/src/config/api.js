@@ -4,7 +4,7 @@
 export const API_URL = 'https://mindaura-wfut.onrender.com';
 
 // 🧠 AI Model Backend (LocalTunnel - Update this link daily when you start the laptop server)
-export const AI_BASE_URL = 'https://cruel-fans-carry.loca.lt';
+export const AI_BASE_URL = 'https://green-lions-behave.loca.lt';
 
 export const API_ENDPOINTS = {
     AUTH: {
@@ -33,5 +33,6 @@ export const API_ENDPOINTS = {
     AI: {
         FACE_EMOTION: `${AI_BASE_URL}/predict/face`,
         VOICE_EMOTION: `${AI_BASE_URL}/predict/voice`,
+        TEXT_EMOTION: `${AI_BASE_URL}/predict/text`, // <--- ඔන්න අලුත් දොර දැම්මා!
     }
 };
