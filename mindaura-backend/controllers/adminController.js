@@ -34,12 +34,20 @@ exports.getUserGrowth = async (req, res) => {
         const { range } = req.query;
         let daysToSubtract = 7;
         let groupFormat = '%Y-%m-%d';
-        let sortField = '_id';
 
-        if (range === 'daily') daysToSubtract = 7;
-        else if (range === 'weekly') daysToSubtract = 28;
-        else if (range === 'monthly') daysToSubtract = 365;
-        else if (range === 'yearly') daysToSubtract = 365 * 2;
+        if (range === 'daily') {
+            daysToSubtract = 7;
+            groupFormat = '%Y-%m-%d';
+        } else if (range === 'weekly') {
+            daysToSubtract = 30;
+            groupFormat = '%Y-%U'; // Year-Week format
+        } else if (range === 'monthly') {
+            daysToSubtract = 365;
+            groupFormat = '%Y-%m'; // Year-Month format
+        } else if (range === 'yearly') {
+            daysToSubtract = 365 * 5;
+            groupFormat = '%Y'; // Year format
+        }
 
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - daysToSubtract);
@@ -51,23 +59,16 @@ exports.getUserGrowth = async (req, res) => {
                     _id: {
                         $dateToString: { format: groupFormat, date: "$createdAt" }
                     },
-                    newUsers: { $sum: 1 }
+                    users: { $sum: 1 }
                 }
             },
-            { $sort: { [sortField]: 1 } }
+            { $sort: { _id: 1 } }
         ]);
 
-        // Format for Recharts (e.g., 'Mon', 'Tue' or 'Jan', 'Feb')
-        const formattedData = growth.map(item => {
-            const date = new Date(item._id);
-            let name = item._id;
-            if (range === 'daily' || range === 'weekly') {
-                name = date.toLocaleDateString('en-US', { weekday: 'short' });
-            } else if (range === 'monthly') {
-                name = date.toLocaleDateString('en-US', { month: 'short' });
-            }
-            return { name, newUsers: item.newUsers };
-        });
+        const formattedData = growth.map(item => ({
+            date: item._id,
+            users: item.users
+        }));
 
         res.json(formattedData);
     } catch (err) {
