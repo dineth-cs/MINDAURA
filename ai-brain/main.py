@@ -98,40 +98,40 @@ def load_models_in_background():
     """Load all ML models after a short delay to let Uvicorn fully start."""
     global voice_model, text_tokenizer, text_model_pt, face_model, models_ready
 
-    print("⏳ Waiting 10 s for Uvicorn to bind port before loading models …")
+    print(" Waiting 10 s for Uvicorn to bind port before loading models …")
     time.sleep(10)
 
     try:
         # ── TensorFlow (must be imported AFTER PyTorch is already initialised) ──
-        print("📦 Importing TensorFlow …")
+        print(" Importing TensorFlow …")
         from tensorflow.keras.models import load_model  # type: ignore
 
         # ── Voice / Acoustic Model (VGG16 trained on Mel-Spectrograms) ──────────
         voice_model_path = "./Models/mindaura_vgg16_perfect.h5"
-        print(f"🎙️  Loading Voice Model (VGG16) from {voice_model_path} …")
+        print(f"  Loading Voice Model (VGG16) from {voice_model_path} …")
         voice_model = load_model(voice_model_path)
-        print(f"✅ Voice model loaded.  Output shape: {voice_model.output_shape}")
+        print(f" Voice model loaded.  Output shape: {voice_model.output_shape}")
 
         # ── Face Model (VGG16 trained on face images) — optional endpoint ────────
         face_model_path = "./Models/mindaura_vgg16_perfect.h5"
-        print(f"🧠 Loading Face Model (VGG16) from {face_model_path} …")
+        print(f" Loading Face Model (VGG16) from {face_model_path} …")
         face_model = load_model(face_model_path)
-        print(f"✅ Face model loaded.")
+        print(f" Face model loaded.")
 
         # ── Text / Linguistic Model (RoBERTa via HuggingFace, PyTorch backend) ───
         roberta_path = "./Models/mindaura_roberta_mega_model"
-        print(f"📝 Loading RoBERTa Tokenizer from {roberta_path} …")
+        print(f" Loading RoBERTa Tokenizer from {roberta_path} …")
         text_tokenizer = AutoTokenizer.from_pretrained(roberta_path)
-        print(f"📝 Loading RoBERTa Classifier from {roberta_path} …")
+        print(f" Loading RoBERTa Classifier from {roberta_path} …")
         text_model_pt = AutoModelForSequenceClassification.from_pretrained(roberta_path)
         text_model_pt.eval()   # Switch to inference mode (disables dropout)
-        print("✅ RoBERTa model loaded.")
+        print(" RoBERTa model loaded.")
 
         models_ready = True
-        print("🚀 All Models Loaded — MindAura Multimodal AI is Ready!")
+        print(" All Models Loaded — MindAura Multimodal AI is Ready!")
 
     except Exception as exc:
-        print(f"❌ Fatal model loading error: {exc}")
+        print(f" Fatal model loading error: {exc}")
         # models_ready remains False → endpoints will return 503
 
 
@@ -235,7 +235,7 @@ def health_check():
     if models_ready:
         return {
             "status":  "ready",
-            "message": "MindAura Multimodal AI is Ready! 🚀",
+            "message": "MindAura Multimodal AI is Ready! ",
             "models": {
                 "voice_model":  "mindaura_vgg16_perfect.h5 (TensorFlow/Keras)",
                 "text_model":   "mindaura_roberta_mega_model (PyTorch/HuggingFace)",
@@ -244,7 +244,7 @@ def health_check():
         }
     return {
         "status":  "warming_up",
-        "message": "Models are loading … please retry in ~30 s ⏳",
+        "message": "Models are loading … please retry in ~30 s ",
     }
 
 
@@ -304,7 +304,7 @@ async def predict_voice(file: UploadFile = File(...)):
         # =====================================================================
         #  BRANCH A — Voice Inference (TensorFlow VGG16 Mel-Spectrogram)
         # =====================================================================
-        print("🎙️  [Branch A] Running VGG16 acoustic inference …")
+        print("  [Branch A] Running VGG16 acoustic inference …")
 
         # Convert raw audio → VGG16-compatible 224×224 RGB spectrogram image
         vgg_input    = audio_to_vgg16_input(audio_raw, native_sr)
@@ -313,7 +313,7 @@ async def predict_voice(file: UploadFile = File(...)):
         voice_emotion = EMOTION_CLASSES[voice_max_idx]
 
         print(
-            f"✅ [Branch A] Voice → {voice_emotion} "
+            f"[Branch A] Voice → {voice_emotion} "
             f"({voice_probs[voice_max_idx] * 100:.1f}%)"
         )
 
@@ -325,7 +325,7 @@ async def predict_voice(file: UploadFile = File(...)):
         text_probs       = None   # Will be a np.ndarray (5,) if RoBERTa succeeds
 
         try:
-            print("🗣️  [Branch B] Resampling audio to 16 kHz for Google STT …")
+            print("  [Branch B] Resampling audio to 16 kHz for Google STT …")
 
             # B-1: Resample to 16 kHz (required by Google Web Speech API)
             audio_16k = librosa.resample(audio_raw, orig_sr=native_sr, target_sr=16_000)
@@ -342,19 +342,19 @@ async def predict_voice(file: UploadFile = File(...)):
 
             try:
                 transcribed_text = recognizer.recognize_google(audio_data)
-                print(f"📝 [Branch B] STT transcription: \"{transcribed_text}\"")
+                print(f" [Branch B] STT transcription: \"{transcribed_text}\"")
             except sr.UnknownValueError:
                 # Google could not understand the audio — not an error, just no speech
                 transcribed_text = None
-                print("🔇 [Branch B] STT: No speech recognized. Falling back to acoustic only.")
+                print(" [Branch B] STT: No speech recognized. Falling back to acoustic only.")
             except sr.RequestError as req_err:
                 # Network / API error — non-fatal, fall back gracefully
                 transcribed_text = None
-                print(f"🌐 [Branch B] STT request error (network?): {req_err}. Falling back to acoustic only.")
+                print(f" [Branch B] STT request error (network?): {req_err}. Falling back to acoustic only.")
 
             # B-4: Run RoBERTa only when we have a valid transcription
             if transcribed_text and transcribed_text.strip():
-                print("📝 [Branch B] Running RoBERTa inference on transcribed text …")
+                print(" [Branch B] Running RoBERTa inference on transcribed text …")
 
                 inputs = text_tokenizer(
                     transcribed_text,
@@ -374,13 +374,13 @@ async def predict_voice(file: UploadFile = File(...)):
                 text_emotion      = EMOTION_CLASSES[text_max_idx]
 
                 print(
-                    f"✅ [Branch B] RoBERTa → {text_emotion} "
+                    f" [Branch B] RoBERTa → {text_emotion} "
                     f"({text_probs[text_max_idx] * 100:.1f}%)"
                 )
 
         except Exception as branch_b_err:
             # Branch B failure must NEVER crash the endpoint — acoustic result is preserved
-            print(f"⚠️  [Branch B] Non-fatal error: {branch_b_err}")
+            print(f"  [Branch B] Non-fatal error: {branch_b_err}")
             transcribed_text = None
             text_probs       = None
             text_emotion     = None
@@ -392,12 +392,12 @@ async def predict_voice(file: UploadFile = File(...)):
             # Both branches succeeded → fuse with equal 0.5 weight
             fused_probs  = (np.array(text_probs) * 0.5) + (np.array(voice_probs) * 0.5)
             fusion_label = "multimodal (acoustic 50% + linguistic 50%)"
-            print("🔀 [Fusion] Averaging acoustic + linguistic probability vectors.")
+            print(" [Fusion] Averaging acoustic + linguistic probability vectors.")
         else:
             # STT failed or produced no text → rely on acoustic model alone
             fused_probs  = np.array(voice_probs)
             fusion_label = "acoustic-only (no speech detected or STT unavailable)"
-            print("🔊 [Fusion] Using acoustic-only probabilities (no linguistic signal).")
+            print(" [Fusion] Using acoustic-only probabilities (no linguistic signal).")
 
         # Resolve the final prediction from the fused distribution
         final_idx        = int(np.argmax(fused_probs))
@@ -405,7 +405,7 @@ async def predict_voice(file: UploadFile = File(...)):
         confidence_pct   = float(fused_probs[final_idx]) * 100.0
 
         print(
-            f"🏆 [Final] Emotion: {final_emotion} | "
+            f" [Final] Emotion: {final_emotion} | "
             f"Confidence: {confidence_pct:.1f}% | "
             f"Mode: {fusion_label}"
         )
@@ -557,7 +557,7 @@ async def predict_text(request: TextRequest):
         confidence    = round(probs_list[max_idx] * 100, 2)
 
         print(
-            f"✅ [/predict/text] RoBERTa → {final_emotion} ({confidence}%) "
+            f" [/predict/text] RoBERTa → {final_emotion} ({confidence}%) "
             f"| Input: \"{request.text.strip()[:80]}\""
         )
 

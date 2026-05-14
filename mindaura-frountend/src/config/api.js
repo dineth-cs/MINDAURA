@@ -1,9 +1,9 @@
-// ✅ Production backend (Render) for Auth, DB, etc.
+//  Production backend (Render) for Auth, DB, etc.
 // For local development (Android Emulator): http://10.0.2.2:5000
 // For local development (iOS Simulator): http://localhost:5000
 export const API_URL = 'https://mindaura-wfut.onrender.com';
 
-// 🧠 AI Model Backend (LocalTunnel - Update this link daily when you start the laptop server)
+//  AI Model Backend (LocalTunnel - Update this link daily when you start the laptop server)
 export const AI_BASE_URL = 'https://plain-cycles-cry.loca.lt';
 
 export const API_ENDPOINTS = {
@@ -33,6 +33,6 @@ export const API_ENDPOINTS = {
     AI: {
         FACE_EMOTION: `${AI_BASE_URL}/predict/face`,
         VOICE_EMOTION: `${AI_BASE_URL}/predict/voice`,
-        TEXT_EMOTION: `${AI_BASE_URL}/predict/text`, // <--- ඔන්න අලුත් දොර දැම්මා!
+        TEXT_EMOTION: `${AI_BASE_URL}/predict/text`, 
     }
 };
