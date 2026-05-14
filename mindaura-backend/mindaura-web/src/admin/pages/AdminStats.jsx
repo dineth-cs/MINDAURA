@@ -102,8 +102,13 @@ export default function AdminStats() {
     ]);
   };
 
+  const safeEmotion = Array.isArray(emotionData) ? emotionData : [];
+  const safeTraffic = Array.isArray(trafficData) ? trafficData : [];
+  const safePending = Array.isArray(pendingSupport) ? pendingSupport : [];
+  const safeActivity = Array.isArray(recentActivity) ? recentActivity : [];
+
   const handleGenerateManifest = () => {
-    const reportData = { timestamp: new Date().toISOString(), activeNodes: stats.userCount, systemUptime: uptime, apiLatency: latency, pendingTickets: stats.tickets.pending, emotionDistribution: emotionData, dailyInferences: trafficData.reduce((acc, curr) => acc + curr.inferences, 0) };
+    const reportData = { timestamp: new Date().toISOString(), activeNodes: stats?.userCount || 0, systemUptime: uptime, apiLatency: latency, pendingTickets: stats?.tickets?.pending || 0, emotionDistribution: safeEmotion, dailyInferences: safeTraffic.reduce((acc, curr) => acc + (curr?.inferences || 0), 0) };
     const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -120,7 +125,16 @@ export default function AdminStats() {
     return [h, m, sec].map(v => v < 10 ? '0' + v : v).join(':');
   };
 
-  const topEmotion = emotionData.length > 0 ? emotionData.reduce((max, c) => c.value > max.value ? c : max) : { name: 'Analyzing', value: 0 };
+  const topEmotion = safeEmotion.length > 0 ? safeEmotion.reduce((max, c) => (c?.value || 0) > (max?.value || 0) ? c : max) : { name: 'Analyzing', value: 0 };
+
+  if (loading) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center h-[60vh]">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-bold tracking-wide uppercase text-sm">Loading Analytics...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6 pb-8">
@@ -141,10 +155,10 @@ export default function AdminStats() {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-        <StatCard title="Active Users" value={loading ? '...' : stats.userCount} subValue="Enrolled" trend={12} icon={<FiUsers className="text-blue-500 text-lg" />} iconBg="bg-blue-50" />
-        <StatCard title="AI Inferences" value={loading ? '...' : (stats.userCount * 8).toLocaleString()} subValue="Est. Today" trend={5} icon={<FiActivity className="text-emerald-500 text-lg" />} iconBg="bg-emerald-50" />
-        <StatCard title="API Latency" value={`${latency}ms`} subValue="Target <100ms" trend={-24} icon={<FiZap className="text-amber-500 text-lg" />} iconBg="bg-amber-50" />
-        <StatCard title="Support Tickets" value={loading ? '...' : stats.tickets?.pending || 0} subValue="Pending" trend={0} icon={<FiMessageSquare className="text-purple-500 text-lg" />} iconBg="bg-purple-50" />
+        <StatCard title="Active Users" value={stats?.userCount || 0} subValue="Enrolled" trend={12} icon={<FiUsers className="text-blue-500 text-lg" />} iconBg="bg-blue-50" />
+        <StatCard title="AI Inferences" value={((stats?.userCount || 0) * 8).toLocaleString()} subValue="Est. Today" trend={5} icon={<FiActivity className="text-emerald-500 text-lg" />} iconBg="bg-emerald-50" />
+        <StatCard title="API Latency" value={`${latency || 0}ms`} subValue="Target <100ms" trend={-24} icon={<FiZap className="text-amber-500 text-lg" />} iconBg="bg-amber-50" />
+        <StatCard title="Support Tickets" value={stats?.tickets?.pending || 0} subValue="Pending" trend={0} icon={<FiMessageSquare className="text-purple-500 text-lg" />} iconBg="bg-purple-50" />
       </div>
 
       {/* System Health Row */}
@@ -178,9 +192,9 @@ export default function AdminStats() {
               <p className="text-xs text-gray-400 font-medium mt-0.5">Multi-modal usage per 4h window</p>
             </div>
           </div>
-          <div className="h-[280px]">
+          <div className="w-full h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trafficData}>
+              <AreaChart data={safeTraffic}>
                 <defs>
                   <linearGradient id="colorInferences" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
@@ -200,28 +214,28 @@ export default function AdminStats() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-horizon p-6">
           <h2 className="text-base font-black text-gray-800 mb-1">Emotion Matrix</h2>
           <p className="text-xs text-gray-400 font-medium mb-4">Real-time sentiment distribution</p>
-          <div className="h-[200px] relative">
+          <div className="w-full h-[200px] relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={emotionData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
-                  {emotionData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                <Pie data={safeEmotion} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
+                  {safeEmotion.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
                 </Pie>
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-              <span className="text-2xl font-black text-gray-800">{topEmotion.value}%</span>
-              <span className={`text-[10px] font-bold uppercase tracking-wide ${topEmotion.name === 'Stressed' || topEmotion.name === 'Sad' ? 'text-red-500' : 'text-emerald-500'}`}>{topEmotion.name}</span>
+              <span className="text-2xl font-black text-gray-800">{topEmotion?.value || 0}%</span>
+              <span className={`text-[10px] font-bold uppercase tracking-wide ${topEmotion?.name === 'Stressed' || topEmotion?.name === 'Sad' ? 'text-red-500' : 'text-emerald-500'}`}>{topEmotion?.name || 'N/A'}</span>
             </div>
           </div>
           <div className="mt-3 space-y-2">
-            {emotionData.map((item, index) => (
-              <div key={item.name} className="flex items-center justify-between">
+            {safeEmotion.map((item, index) => (
+              <div key={item?.name || index} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index] }} />
-                  <span className="text-xs font-medium text-gray-600">{item.name}</span>
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                  <span className="text-xs font-medium text-gray-600">{item?.name || 'Unknown'}</span>
                 </div>
-                <span className="text-xs font-bold text-gray-800">{item.value}%</span>
+                <span className="text-xs font-bold text-gray-800">{item?.value || 0}%</span>
               </div>
             ))}
           </div>
@@ -242,25 +256,25 @@ export default function AdminStats() {
             </Link>
           </div>
           <div className="p-4 space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
-            {pendingSupport.length === 0 ? (
+            {safePending.length === 0 ? (
               <div className="text-center py-10">
                 <FiCheckCircle className="text-emerald-400 mx-auto mb-2" size={28} />
                 <p className="text-emerald-600 font-bold text-xs uppercase tracking-wide">No Pending Tickets</p>
               </div>
-            ) : pendingSupport.map((ticket) => (
-              <div key={ticket._id} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:border-blue-100 hover:bg-blue-50/20 transition-all cursor-pointer group">
+            ) : safePending.map((ticket) => (
+              <div key={ticket?._id || Math.random()} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:border-blue-100 hover:bg-blue-50/20 transition-all cursor-pointer group">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-100 to-purple-100 overflow-hidden">
-                      <img src={ticket.user?.profilePicture || `https://api.dicebear.com/7.x/notionists/svg?seed=${ticket.user?.name || 'A'}&backgroundColor=transparent`} className="w-full h-full object-cover" alt="user" />
+                      <img src={ticket?.user?.profilePicture || `https://api.dicebear.com/7.x/notionists/svg?seed=${ticket?.user?.name || 'A'}&backgroundColor=transparent`} className="w-full h-full object-cover" alt="user" />
                     </div>
-                    <span className="text-sm font-bold text-gray-800">{ticket.user?.name || 'Unknown'}</span>
+                    <span className="text-sm font-bold text-gray-800">{ticket?.user?.name || 'Unknown'}</span>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${ticket.priority === 'Critical' || ticket.priority === 'High' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{ticket.priority || 'Normal'}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${ticket?.priority === 'Critical' || ticket?.priority === 'High' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{ticket?.priority || 'Normal'}</span>
                 </div>
-                <p className="text-xs text-gray-500 font-medium line-clamp-2">{ticket.message || ticket.issue}</p>
+                <p className="text-xs text-gray-500 font-medium line-clamp-2">{ticket?.message || ticket?.issue || 'No message'}</p>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-                  <span className="text-[10px] text-gray-400 flex items-center gap-1"><FiClock size={10} /> {new Date(ticket.createdAt).toLocaleDateString()}</span>
+                  <span className="text-[10px] text-gray-400 flex items-center gap-1"><FiClock size={10} /> {ticket?.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : 'N/A'}</span>
                   <Link to="/admin/support" className="text-[10px] font-bold text-blue-500 hover:text-purple-600 transition-colors">Reply →</Link>
                 </div>
               </div>
@@ -291,22 +305,22 @@ export default function AdminStats() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {recentActivity.length === 0 ? (
+                {safeActivity.length === 0 ? (
                   <tr><td colSpan="4" className="px-6 py-10 text-center text-xs text-gray-400">No telemetry data available</td></tr>
-                ) : recentActivity.map((log, index) => (
-                  <tr key={log._id || index} className="hover:bg-gray-50/70 transition-colors">
+                ) : safeActivity.map((log, index) => (
+                  <tr key={log?._id || index} className="hover:bg-gray-50/70 transition-colors">
                     <td className="px-6 py-3 text-[10px] font-medium text-gray-400">
-                      {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {log?.createdAt ? new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                     </td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide ${
-                        log.target?.includes('User') ? 'bg-blue-50 text-blue-500' :
-                        log.target?.includes('System') ? 'bg-amber-50 text-amber-600' :
+                        log?.target?.includes('User') ? 'bg-blue-50 text-blue-500' :
+                        log?.target?.includes('System') ? 'bg-amber-50 text-amber-600' :
                         'bg-gray-100 text-gray-500'
-                      }`}>{log.target}</span>
+                      }`}>{log?.target || 'N/A'}</span>
                     </td>
-                    <td className="px-6 py-3 text-xs font-medium text-gray-700">{log.action}</td>
-                    <td className={`px-6 py-3 text-right text-[10px] font-bold uppercase tracking-wide ${log.status === 'Success' ? 'text-emerald-500' : 'text-red-500'}`}>{log.status}</td>
+                    <td className="px-6 py-3 text-xs font-medium text-gray-700">{log?.action || 'Unknown'}</td>
+                    <td className={`px-6 py-3 text-right text-[10px] font-bold uppercase tracking-wide ${log?.status === 'Success' ? 'text-emerald-500' : 'text-red-500'}`}>{log?.status || 'N/A'}</td>
                   </tr>
                 ))}
               </tbody>
