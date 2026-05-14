@@ -102,7 +102,6 @@ export default function UserManagement() {
                 <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wide">User</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Status</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Joined</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Role</th>
                 <th className="px-6 py-4 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
@@ -125,7 +124,6 @@ export default function UserManagement() {
                     <span className={`px-2.5 py-1 text-[10px] font-bold border rounded-full uppercase tracking-wide ${user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'}`}>{user.status}</span>
                   </td>
                   <td className="px-6 py-4 text-xs font-medium text-gray-500">{user.joinDate}</td>
-                  <td className="px-6 py-4 text-xs font-semibold text-purple-600 uppercase tracking-wide">{user.isAdmin ? 'ADMIN' : (user.tier || 'TIER 1')}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
                       <button onClick={() => setSelectedUser(user)} className="p-2 rounded-xl border border-gray-200 text-gray-400 hover:bg-blue-50 hover:text-blue-500 hover:border-blue-100 transition-all" title="View"><Eye size={15} /></button>
