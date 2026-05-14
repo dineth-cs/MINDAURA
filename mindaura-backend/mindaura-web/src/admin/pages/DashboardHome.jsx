@@ -5,16 +5,17 @@ import axiosInstance from '../../utils/axiosInstance';
 import UserGrowthChart from '../components/UserGrowthChart';
 
 export default function DashboardHome() {
-  const [stats, setStats] = useState({ userCount: 0, uptime: 0, latency: 0, tickets: { pending: 0, inProgress: 0, resolved: 0 } });
+  const [stats, setStats] = useState({});
   const [moodDistribution, setMoodDistribution] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [chartsLoading, setChartsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
     const interval = setInterval(() => {
-      setStats(prev => ({ ...prev, uptime: (prev.uptime || 0) + 1 }));
+      setStats(prev => ({ ...prev, uptime: (prev?.uptime || 0) + 1 }));
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -25,14 +26,16 @@ export default function DashboardHome() {
 
   const fetchDashboardData = async () => {
     try {
+      setError(null);
       const [statsRes, logsRes] = await Promise.all([
         axiosInstance.get('/admin/stats'),
         axiosInstance.get('/admin/audit-logs')
       ]);
-      setStats(statsRes.data);
-      setLogs(logsRes.data || []);
-    } catch (error) {
-      console.warn("API Offline. Failed to fetch dashboard data.", error);
+      setStats(typeof statsRes?.data === 'object' ? statsRes.data : {});
+      setLogs(Array.isArray(logsRes?.data) ? logsRes.data : []);
+    } catch (err) {
+      console.warn("API Offline. Failed to fetch dashboard data.", err);
+      setError("Failed to load dashboard data. Please verify your connection.");
     } finally {
       setLoading(false);
     }
@@ -42,9 +45,10 @@ export default function DashboardHome() {
     setChartsLoading(true);
     try {
       const moodRes = await axiosInstance.get('/admin/analytics/mood-distribution');
-      setMoodDistribution(moodRes.data);
-    } catch (error) {
-      console.warn("Analytics API Error", error);
+      setMoodDistribution(Array.isArray(moodRes?.data) ? moodRes.data : []);
+    } catch (err) {
+      console.warn("Analytics API Error", err);
+      setMoodDistribution([]);
     } finally {
       setChartsLoading(false);
     }
@@ -118,8 +122,29 @@ export default function DashboardHome() {
 
   const positiveMood = safeMood.find(m => m?.name === 'Happy' || m?.name === 'Energy')?.value || 0;
 
-  if (loading || !stats) {
-    return <div className="p-8 text-center text-gray-500 font-bold mt-10">Loading Dashboard...</div>;
+  if (error) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center h-[60vh] text-center animate-in fade-in zoom-in-95 duration-300">
+        <FiServer className="text-red-500 text-5xl mb-6 drop-shadow-sm" />
+        <h2 className="text-2xl font-black text-gray-800 tracking-tight">Connection Error</h2>
+        <p className="text-gray-500 mt-2 font-medium">{error}</p>
+        <button 
+          onClick={() => { setLoading(true); fetchDashboardData(); }} 
+          className="mt-6 px-8 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl shadow-lg shadow-red-500/30 hover:shadow-red-500/50 hover:-translate-y-0.5 transition-all font-bold tracking-wide"
+        >
+          Retry Connection
+        </button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center h-[60vh]">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-bold tracking-wide uppercase text-sm">Loading Dashboard...</p>
+      </div>
+    );
   }
 
   return (

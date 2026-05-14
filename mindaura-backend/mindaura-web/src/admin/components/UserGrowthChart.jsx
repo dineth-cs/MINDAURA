@@ -19,9 +19,11 @@ export default function UserGrowthChart() {
         });
         // Sometimes backend might be on different URL, ideally use env vars or relative paths if proxied.
         // If the app uses a proxy, '/api/admin/...' would work. Assuming standard setup based on user prompt.
-        setData(response.data);
+        const safeData = Array.isArray(response?.data) ? response.data : [];
+        setData(safeData);
       } catch (error) {
         console.error("Failed to fetch user growth data:", error);
+        setData([]);
       } finally {
         setLoading(false);
       }
@@ -59,7 +61,7 @@ export default function UserGrowthChart() {
           <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-10">
             <div className="w-8 h-8 border-4 border-[#4F46E5] border-t-transparent rounded-full animate-spin"></div>
           </div>
-        ) : data.length > 0 ? (
+        ) : (data && Array.isArray(data) && data.length > 0) ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
