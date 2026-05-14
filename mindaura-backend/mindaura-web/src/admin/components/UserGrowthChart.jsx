@@ -1,33 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import axios from 'axios';
 
 export default function UserGrowthChart() {
   const [timeframe, setTimeframe] = useState('monthly');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const mockGrowthData = {
+    DAILY: [{ name: 'Mon', users: 4 }, { name: 'Tue', users: 7 }, { name: 'Wed', users: 5 }, { name: 'Thu', users: 12 }, { name: 'Fri', users: 9 }],
+    WEEKLY: [{ name: 'W1', users: 15 }, { name: 'W2', users: 22 }, { name: 'W3', users: 18 }, { name: 'W4', users: 30 }],
+    MONTHLY: [{ name: 'Jan', users: 40 }, { name: 'Feb', users: 65 }, { name: 'Mar', users: 55 }, { name: 'Apr', users: 90 }],
+    YEARLY: [{ name: '2023', users: 200 }, { name: '2024', users: 450 }, { name: '2025', users: 800 }, { name: '2026', users: 1200 }]
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get(`/api/admin/analytics/user-growth`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        const allData = response?.data || {};
-        const safeData = Array.isArray(allData[timeframe]) ? allData[timeframe] : [];
-        setData(safeData);
-      } catch (error) {
-        console.error("Failed to fetch user growth data:", error);
-        setData([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    setLoading(true);
+    // Simulate slight network delay for realism
+    const timer = setTimeout(() => {
+      const currentData = mockGrowthData[timeframe.toUpperCase()] || [];
+      setData(currentData);
+      setLoading(false);
+    }, 400);
+    return () => clearTimeout(timer);
   }, [timeframe]);
 
   return (
