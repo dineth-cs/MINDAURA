@@ -82,10 +82,13 @@ export default function DashboardHome() {
     return `${h}h ${m}m ${s}s`;
   };
 
+  const safeLogs = Array.isArray(logs) ? logs : [];
+  const safeMood = Array.isArray(moodDistribution) ? moodDistribution : [];
+
   const statCards = [
     {
       label: 'Total Enrolled Users',
-      value: stats.userCount.toLocaleString(),
+      value: (stats?.userCount || 0).toLocaleString(),
       change: 'Live',
       icon: <FiUsers className="text-blue-500 text-xl" />,
       iconBg: 'bg-blue-50',
@@ -93,15 +96,15 @@ export default function DashboardHome() {
     },
     {
       label: 'Active Support Tickets',
-      value: (stats.tickets?.pending || 0) + (stats.tickets?.inProgress || 0),
-      change: `${stats.tickets?.pending || 0} Pending`,
+      value: (stats?.tickets?.pending || 0) + (stats?.tickets?.inProgress || 0),
+      change: `${stats?.tickets?.pending || 0} Pending`,
       icon: <FiActivity className="text-purple-500 text-xl" />,
       iconBg: 'bg-purple-50',
       badge: 'bg-purple-50 text-purple-600 border-purple-100'
     },
     {
       label: 'System Uptime',
-      value: formatUptime(stats.uptime),
+      value: formatUptime(stats?.uptime || 0),
       change: 'Healthy',
       icon: <FiServer className="text-emerald-500 text-xl" />,
       iconBg: 'bg-emerald-50',
@@ -109,11 +112,15 @@ export default function DashboardHome() {
     },
   ];
 
-  const systemAlerts = logs.filter(l =>
-    l.target === 'System Logs' || l.target === 'System Firewall' || l.status !== 'Success'
+  const systemAlerts = safeLogs.filter(l =>
+    l?.target === 'System Logs' || l?.target === 'System Firewall' || l?.status !== 'Success'
   ).slice(0, 5);
 
-  const positiveMood = moodDistribution.find(m => m.name === 'Happy' || m.name === 'Energy')?.value || 0;
+  const positiveMood = safeMood.find(m => m?.name === 'Happy' || m?.name === 'Energy')?.value || 0;
+
+  if (loading || !stats) {
+    return <div className="p-8 text-center text-gray-500 font-bold mt-10">Loading Dashboard...</div>;
+  }
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
@@ -179,11 +186,11 @@ export default function DashboardHome() {
             )}
             
             <div className="h-[260px] w-full md:w-1/2 relative">
-              {moodDistribution.length > 0 ? (
+              {safeMood.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={moodDistribution}
+                      data={safeMood}
                       innerRadius={75}
                       outerRadius={100}
                       paddingAngle={6}
@@ -192,8 +199,8 @@ export default function DashboardHome() {
                       animationBegin={200}
                       animationDuration={1800}
                     >
-                      {moodDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      {safeMood.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry?.fill || '#ccc'} />
                       ))}
                     </Pie>
                     <Tooltip 
@@ -212,15 +219,15 @@ export default function DashboardHome() {
             </div>
 
             <div className="w-full md:w-[45%] grid grid-cols-1 gap-3 overflow-y-auto max-h-[300px] pr-1 custom-scrollbar">
-              {moodDistribution.map((item, i) => (
+              {safeMood.map((item, i) => (
                 <div key={i} className="flex items-center justify-between p-3.5 rounded-2xl bg-gray-50/50 border border-gray-50 hover:border-gray-200 transition-all group">
                   <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: item.fill }} />
-                    <span className="text-xs font-bold text-gray-700 group-hover:text-gray-900">{item.name}</span>
+                    <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: item?.fill || '#ccc' }} />
+                    <span className="text-xs font-bold text-gray-700 group-hover:text-gray-900">{item?.name || 'N/A'}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black text-gray-800">{item.value}%</span>
-                    <FiArrowUpRight className={`text-[10px] ${item.value > 20 ? 'text-emerald-500' : 'text-gray-300'}`} />
+                    <span className="text-xs font-black text-gray-800">{item?.value || 0}%</span>
+                    <FiArrowUpRight className={`text-[10px] ${(item?.value || 0) > 20 ? 'text-emerald-500' : 'text-gray-300'}`} />
                   </div>
                 </div>
               ))}
@@ -249,24 +256,22 @@ export default function DashboardHome() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {loading ? (
-                  <tr><td colSpan="4" className="py-10 text-center">Syncing...</td></tr>
-                ) : logs.slice(0, 7).map((log, i) => (
+                {safeLogs.slice(0, 7).map((log, i) => (
                   <tr key={i} className="hover:bg-gray-50/70 transition-colors group">
                     <td className="py-4 text-xs text-gray-400 font-medium whitespace-nowrap">
-                      {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {log?.createdAt ? new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                     </td>
                     <td className="py-4 pr-4">
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-700 group-hover:text-blue-600 transition-colors leading-tight">{log.action}</span>
+                        <span className="text-sm font-bold text-gray-700 group-hover:text-blue-600 transition-colors leading-tight">{log?.action || 'N/A'}</span>
                       </div>
                     </td>
                     <td className="py-4">
-                      <span className="px-2 py-0.5 rounded bg-gray-50 text-[10px] font-bold text-gray-500 uppercase border border-gray-100">{log.target}</span>
+                      <span className="px-2 py-0.5 rounded bg-gray-50 text-[10px] font-bold text-gray-500 uppercase border border-gray-100">{log?.target || 'N/A'}</span>
                     </td>
                     <td className="py-4 text-right">
-                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wide border ${log.status === 'Success' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-500 border-red-100'}`}>
-                        {log.status}
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wide border ${log?.status === 'Success' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-500 border-red-100'}`}>
+                        {log?.status || 'N/A'}
                       </span>
                     </td>
                   </tr>
@@ -286,9 +291,9 @@ export default function DashboardHome() {
           </div>
           <div className="space-y-4 mb-8">
             {[
-              { label: 'API Connectivity', status: 'Optimal', val: `${stats.latency || 12}ms`, color: 'text-emerald-500' },
+              { label: 'API Connectivity', status: 'Optimal', val: `${stats?.latency || 0}ms`, color: 'text-emerald-500' },
               { label: 'Cloud Database', status: 'Healthy', val: '99.9%', color: 'text-blue-500' },
-              { label: 'System Uptime', status: 'Active', val: formatUptime(stats.uptime).split(' ')[0], color: 'text-purple-500' },
+              { label: 'System Uptime', status: 'Active', val: formatUptime(stats?.uptime || 0).split(' ')[0], color: 'text-purple-500' },
             ].map((h, i) => (
               <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/50 border border-gray-50">
                 <div>
@@ -303,10 +308,10 @@ export default function DashboardHome() {
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Priority Alerts</h3>
             {systemAlerts.map((alert, i) => (
               <div key={i} className="flex items-start gap-3 p-3 rounded-2xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100 group">
-                <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${alert.status !== 'Success' ? 'bg-red-500' : 'bg-blue-500'}`} />
+                <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${alert?.status !== 'Success' ? 'bg-red-500' : 'bg-blue-500'}`} />
                 <div>
-                  <p className="text-xs font-bold text-gray-700 leading-snug">{alert.action}</p>
-                  <p className="text-[9px] text-gray-400 mt-1 font-medium">{new Date(alert.createdAt).toLocaleTimeString()}</p>
+                  <p className="text-xs font-bold text-gray-700 leading-snug">{alert?.action || 'N/A'}</p>
+                  <p className="text-[9px] text-gray-400 mt-1 font-medium">{alert?.createdAt ? new Date(alert.createdAt).toLocaleTimeString() : 'N/A'}</p>
                 </div>
               </div>
             ))}
