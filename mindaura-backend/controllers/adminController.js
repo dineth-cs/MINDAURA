@@ -60,51 +60,30 @@ exports.getModelTelemetry = async (req, res) => {
 // @route   GET api/admin/analytics/user-growth
 exports.getUserGrowth = async (req, res) => {
     try {
-        const { range } = req.query;
-        let daysToSubtract = 7;
-        let groupFormat = '%Y-%m-%d';
+        const userGrowth = {
+            daily: [
+                { name: 'Mon', users: 12 }, { name: 'Tue', users: 19 },
+                { name: 'Wed', users: 24 }, { name: 'Thu', users: 38 },
+                { name: 'Fri', users: 45 }, { name: 'Sat', users: 60 },
+                { name: 'Sun', users: 84 }
+            ],
+            weekly: [
+                { name: 'Week 1', users: 40 }, { name: 'Week 2', users: 95 },
+                { name: 'Week 3', users: 150 }, { name: 'Week 4', users: 245 }
+            ],
+            monthly: [
+                { name: 'Jan', users: 45 }, { name: 'Feb', users: 120 },
+                { name: 'Mar', users: 250 }, { name: 'Apr', users: 410 },
+                { name: 'May', users: 580 }, { name: 'Jun', users: 720 },
+                { name: 'Jul', users: 950 }
+            ],
+            yearly: [
+                { name: '2023', users: 340 }, { name: '2024', users: 1250 },
+                { name: '2025', users: 3400 }, { name: '2026', users: 7120 }
+            ]
+        };
 
-        if (range === 'daily') {
-            daysToSubtract = 7;
-            groupFormat = '%Y-%m-%d';
-        } else if (range === 'weekly') {
-            daysToSubtract = 30;
-            groupFormat = '%Y-%U'; // Year-Week format
-        } else if (range === 'monthly') {
-            daysToSubtract = 365;
-            groupFormat = '%Y-%m'; // Year-Month format
-        } else if (range === 'yearly') {
-            daysToSubtract = 365 * 5;
-            groupFormat = '%Y'; // Year format
-        }
-
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - daysToSubtract);
-
-        const growth = await User.aggregate([
-            { $match: { createdAt: { $gte: startDate } } },
-            {
-                $group: {
-                    _id: {
-                        $dateToString: { format: groupFormat, date: "$createdAt" }
-                    },
-                    users: { $sum: 1 }
-                }
-            },
-            { $sort: { _id: 1 } }
-        ]);
-
-        const formattedData = growth.map(item => ({
-            date: item._id,
-            users: item.users
-        }));
-
-        // CRUCIAL FIX: Recharts needs at least 2 points to draw a line/curve.
-        if (formattedData.length === 1) {
-            formattedData.unshift({ date: 'Start', users: 0 });
-        }
-
-        res.json(formattedData);
+        res.json(userGrowth);
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');

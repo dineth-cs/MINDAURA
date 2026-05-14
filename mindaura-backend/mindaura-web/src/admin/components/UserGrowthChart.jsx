@@ -12,14 +12,13 @@ export default function UserGrowthChart() {
       setLoading(true);
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`/api/admin/analytics/user-growth?range=${timeframe.toLowerCase()}`, {
+        const response = await axios.get(`/api/admin/analytics/user-growth`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
-        // Sometimes backend might be on different URL, ideally use env vars or relative paths if proxied.
-        // If the app uses a proxy, '/api/admin/...' would work. Assuming standard setup based on user prompt.
-        const safeData = Array.isArray(response?.data) ? response.data : [];
+        const allData = response?.data || {};
+        const safeData = Array.isArray(allData[timeframe]) ? allData[timeframe] : [];
         setData(safeData);
       } catch (error) {
         console.error("Failed to fetch user growth data:", error);
@@ -72,7 +71,7 @@ export default function UserGrowthChart() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis 
-                dataKey="date" 
+                dataKey="name" 
                 axisLine={false} 
                 tickLine={false} 
                 tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }} 
