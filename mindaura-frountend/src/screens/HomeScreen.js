@@ -17,7 +17,6 @@ import {
     BackHandler,
     DeviceEventEmitter
 } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -92,13 +91,7 @@ export default function HomeScreen() {
     }, [userId]);
 
     // ── Mood History: Load from API for chart and counts ──
-    const [chartDataState, setChartDataState] = useState({
-        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-        datasets: [
-            { data: [0,0,0,0,0,0,0], color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`, strokeWidth: 3 },
-            { data: [10], withDots: false, color: () => 'rgba(0, 0, 0, 0)' }
-        ]
-    });
+
 
     const loadMoodHistory = useCallback(async () => {
         try {
@@ -131,26 +124,6 @@ export default function HomeScreen() {
 
             setWeeklyCount(weekCount);
             setMonthlyCount(monthCount);
-
-            const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-            const moodScore = (mood) => ({ Happy: 9, Energy: 8, Neutral: 6, Bored: 5, Sad: 3, Stress: 2, Anxious: 2 }[mood] || 5);
-            
-            const data = days.map((_, i) => {
-                const day = new Date(weekStart);
-                day.setDate(weekStart.getDate() + i);
-                const dateStr = day.toISOString().split('T')[0];
-                const dayEntries = history.filter(e => e.date && e.date.startsWith(dateStr));
-                if (!dayEntries.length) return 0;
-                return Math.round(dayEntries.reduce((s, e) => s + moodScore(e.mood), 0) / dayEntries.length);
-            });
-
-            setChartDataState({
-                labels: days,
-                datasets: [
-                    { data, color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`, strokeWidth: 3 },
-                    { data: [10], withDots: false, color: () => 'rgba(0, 0, 0, 0)' }
-                ]
-            });
 
         } catch (error) {
             console.warn('Failed to load home mood history:', error);
@@ -506,75 +479,7 @@ export default function HomeScreen() {
                 </View>
 
                 {/* Progress Summary Section */}
-                <View style={[styles.sectionContainer, styles.premiumSummaryBox, { backgroundColor: currentTheme.card }]}>
-                    <View style={styles.sectionHeaderRow}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={[styles.sectionTitle, { color: currentTheme.text }]}>Your Progress Summary</Text>
-                            <TouchableOpacity 
-                                onPress={() => Alert.alert("Wellness Score", "This is your daily Wellness Score (out of 10). Aura calculates this based on your voice, facial expressions, and text interactions.")}
-                                style={{ marginLeft: 6 }}
-                            >
-                                <Ionicons name="information-circle-outline" size={20} color={currentTheme.subText} />
-                            </TouchableOpacity>
-                        </View>
-                        <TouchableOpacity onPress={() => navigation.navigate('ProgressReportScreen')}>
-                            <Text style={styles.viewAllText}>View All</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <Text style={{ fontSize: 13, color: currentTheme.subText, marginBottom: 8, marginTop: -8 }}>
-                        Your emotional wellness score out of 10 over the past 7 days.
-                    </Text>
-
-                    {/* Last Check-in Indicator */}
-                    <Text style={[styles.lastCheckIn, { color: currentTheme.subText }]}>
-                        ⏱️ Last check-in: {lastCheckIn.time} ({lastCheckIn.mood} {lastCheckIn.emoji})
-                    </Text>
-
-                    {/* Mood Stability Chart */}
-                    <View style={styles.chartWrapper}>
-                        <LineChart
-                            data={chartDataState}
-                            width={screenWidth - 64} // Responsive width
-                            height={180}
-                            fromZero={true}
-                            segments={5}
-                            formatYLabel={(yValue) => {
-                                const val = Math.round(parseFloat(yValue));
-                                if (val === 0) return '0';
-                                if (val >= 9) return `${val} 🤩`;
-                                if (val >= 7) return `${val} 😊`;
-                                if (val >= 5) return `${val} 🧘`;
-                                if (val >= 3) return `${val} ☁️`;
-                                return `${val} 😔`;
-                            }}
-                            chartConfig={{
-                                backgroundColor: currentTheme.card,
-                                backgroundGradientFrom: currentTheme.card,
-                                backgroundGradientTo: currentTheme.card,
-                                decimalPlaces: 0,
-                                color: (opacity = 1) => `rgba(107, 142, 254, ${opacity})`,
-                                labelColor: (opacity = 1) => currentTheme.subText,
-                                style: { borderRadius: 16 },
-                                propsForDots: {
-                                    r: "4",
-                                    strokeWidth: "2",
-                                    stroke: "#6B8EFE"
-                                },
-                                propsForBackgroundLines: {
-                                    strokeDasharray: "", // solid lines
-                                    stroke: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
-                                }
-                            }}
-                            bezier
-                            style={styles.chartStyle}
-                            withInnerLines={true}
-                            withOuterLines={false}
-                            withVerticalLines={false}
-                            withHorizontalLines={true}
-                        />
-                    </View>
-
+                <View style={styles.sectionContainer}>
                     <View style={styles.progressSummaryRow}>
                         <View style={[styles.summaryBlock, { backgroundColor: summaryGreen }]}>
                             <Text style={[styles.summaryNumber, { color: '#22C55E' }]}>{taskMastery}%</Text>

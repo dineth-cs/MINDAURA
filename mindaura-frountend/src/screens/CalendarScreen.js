@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator, DeviceEventEmitter } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator, DeviceEventEmitter, Modal } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
@@ -12,21 +12,20 @@ const screenWidth = Dimensions.get('window').width;
 
 const MOOD_COLORS = {
     Happy: '#FFD700',
-    Energy: '#6B8EFE',
-    Stress: '#FF6B6B',
-    Sad: '#4DABF7',
-    Bored: '#CED4DA'
+    Surprise: '#A855F7',
+    Neutral: '#CED4DA',
+    Angry: '#FF6B6B',
+    Sad: '#4DABF7'
 };
 
 // Reverse-map: mood score value → brand color
 // Used by getDotColor so each dot on the chart matches its mood's color
 const SCORE_COLOR = {
-    9: '#FFD700',   // Happy
-    8: '#6B8EFE',   // Energy
-    6: '#ADB5BD',   // Neutral
-    5: '#CED4DA',   // Bored
-    3: '#4DABF7',   // Sad
-    2: '#FF6B6B',   // Stress / Anxious
+    10: '#FFD700',  // Happy
+    8: '#A855F7',   // Surprise
+    6: '#CED4DA',   // Neutral
+    4: '#FF6B6B',   // Angry
+    2: '#4DABF7',   // Sad
     0: 'transparent', // empty slot
 };
 
@@ -52,6 +51,11 @@ export default function CalendarScreen() {
     // Default to today's date
     const today = new Date().toISOString().split('T')[0];
     const [selectedDate, setSelectedDate] = useState(today);
+    const [isModalVisible, setModalVisible] = useState(false);
+
+    const getEntriesForDate = (dateString) => {
+        return moodHistory.filter(e => e.date && e.date.startsWith(dateString));
+    };
 
     const fetchMoodHistory = useCallback(async () => {
         try {
@@ -112,7 +116,7 @@ export default function CalendarScreen() {
 
     // --- Build real chart data from moodHistory, fallback to zeros ---
     const buildChartData = (period) => {
-        const moodScore = (mood) => ({ Happy: 9, Energy: 8, Neutral: 6, Bored: 5, Sad: 3, Stress: 2, Anxious: 2 }[mood] || 5);
+        const moodScore = (mood) => ({ Happy: 10, Surprise: 8, Neutral: 6, Angry: 4, Sad: 2 }[mood] || 0);
 
         if (moodHistory.length === 0) {
             // Honest empty fallback: all zeros, no fake data
@@ -189,7 +193,7 @@ export default function CalendarScreen() {
     const getOverallMoodText = () => {
         if (!moodHistory.length) return 'No mood data recorded yet.';
         const latest = moodHistory[moodHistory.length - 1];
-        const emoji = { Happy: '😄', Energy: '⚡', Sad: '😔', Stress: '😤', Anxious: '😟', Bored: '😐', Neutral: '😐' };
+        const emoji = { Happy: '😄', Surprise: '😲', Neutral: '😐', Angry: '😡', Sad: '😢' };
         return `Latest Mood: ${latest.mood} ${emoji[latest.mood] || ''}`;
     };
 
@@ -242,7 +246,10 @@ export default function CalendarScreen() {
                                 key={isDarkMode ? 'dark' : 'light'}
                                 markingType={'dot'}
                                 current={today}
-                                onDayPress={(day) => setSelectedDate(day.dateString)}
+                                onDayPress={(day) => {
+                                    setSelectedDate(day.dateString);
+                                    setModalVisible(true);
+                                }}
                                 markedDates={{
                                     ...markedDates,
                                     // Spread any existing dot for the selected date, then apply selection highlight
@@ -280,10 +287,10 @@ export default function CalendarScreen() {
                             {/* Unified Legend */}
                             <View style={styles.unifiedLegendContainer}>
                                 {renderLegendItem(MOOD_COLORS.Happy, 'Happy')}
-                                {renderLegendItem(MOOD_COLORS.Energy, 'Energy')}
-                                {renderLegendItem(MOOD_COLORS.Stress, 'Stress')}
+                                {renderLegendItem(MOOD_COLORS.Surprise, 'Surprise')}
+                                {renderLegendItem(MOOD_COLORS.Neutral, 'Neutral')}
+                                {renderLegendItem(MOOD_COLORS.Angry, 'Angry')}
                                 {renderLegendItem(MOOD_COLORS.Sad, 'Sad')}
-                                {renderLegendItem(MOOD_COLORS.Bored, 'Bored')}
                             </View>
 
                             {/* No history hint */}
@@ -342,7 +349,15 @@ export default function CalendarScreen() {
                         height={220}
                         fromZero={true}
                         segments={5}
-                        formatYLabel={(value) => parseInt(value).toString()}
+                        formatYLabel={(value) => {
+                            const val = parseInt(value);
+                            if (val === 10) return '😄';
+                            if (val === 8) return '😲';
+                            if (val === 6) return '😐';
+                            if (val === 4) return '😡';
+                            if (val === 2) return '😢';
+                            return '';
+                        }}
                         chartConfig={chartConfig}
                         getDotColor={(dataPoint) => scoreToColor(dataPoint)}
                         bezier
@@ -374,6 +389,51 @@ export default function CalendarScreen() {
                 </TouchableOpacity>
 
             </ScrollView>
+
+            {/* Daily Mood Details Modal */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={isModalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: currentTheme.card }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: currentTheme.text }]}>
+                                {new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </Text>
+                            <TouchableOpacity onPress={() => setModalVisible(false)}>
+                                <Text style={{ color: currentTheme.subText, fontSize: 20 }}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={styles.modalBody}>
+                            {getEntriesForDate(selectedDate).length === 0 ? (
+                                <Text style={{ color: currentTheme.subText, textAlign: 'center', marginTop: 20 }}>
+                                    No moods recorded on this date.
+                                </Text>
+                            ) : (
+                                getEntriesForDate(selectedDate).map((entry, index) => (
+                                    <View key={index} style={[styles.entryItem, { borderBottomColor: isDarkMode ? '#3A3A4A' : '#E2E8F0' }]}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <View style={[styles.entryColorDot, { backgroundColor: MOOD_COLORS[entry.mood] || '#CED4DA' }]} />
+                                            <Text style={{ color: currentTheme.text, fontWeight: 'bold', fontSize: 16 }}>
+                                                {entry.mood}
+                                            </Text>
+                                        </View>
+                                        <Text style={{ color: currentTheme.subText, fontSize: 12 }}>
+                                            {new Date(entry.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                    </View>
+                                ))
+                            )}
+                        </ScrollView>
+                        <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+                            <Text style={styles.closeButtonText}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -507,5 +567,60 @@ const styles = StyleSheet.create({
         color: 'rgba(255,255,255,0.7)',
         fontWeight: '300',
         marginLeft: 8,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        width: '100%',
+        maxHeight: '80%',
+        borderRadius: 20,
+        padding: 20,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    modalBody: {
+        marginBottom: 20,
+    },
+    entryItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+    },
+    entryColorDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        marginRight: 10,
+    },
+    closeButton: {
+        backgroundColor: '#6B8EFE',
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    closeButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
