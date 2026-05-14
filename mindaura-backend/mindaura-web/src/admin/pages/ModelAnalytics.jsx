@@ -46,6 +46,12 @@ export default function ModelAnalytics() {
       face: { accuracy: 79.0, valLoss: 0.65, inferenceTime: 450 },
       voice: { accuracy: 86.4, valLoss: 0.42, inferenceTime: 850 },
       text: { accuracy: 88.7, valLoss: 0.35, inferenceTime: 600 }
+    },
+    systemMetrics: {
+      crossModalSync: "0.12",
+      globalSharding: "100%",
+      encryption: "TLS 1.3",
+      coreVersion: "2.4.0"
     }
   });
 
@@ -130,10 +136,10 @@ export default function ModelAnalytics() {
         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">System Performance Metrics</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-white">
           {[
-            { label: 'Cross-Modal Sync', value: '0.12', unit: 'variance' },
-            { label: 'Global Sharding', value: '100%', unit: 'deployed' },
-            { label: 'Encryption', value: 'TLS 1.3', unit: 'secured' },
-            { label: 'Core Version', value: '2.4.0', unit: 'nightly' },
+            { label: 'Cross-Modal Sync', value: telemetry.systemMetrics.crossModalSync, unit: 'variance' },
+            { label: 'Global Sharding', value: telemetry.systemMetrics.globalSharding, unit: 'deployed' },
+            { label: 'Encryption', value: telemetry.systemMetrics.encryption, unit: 'secured' },
+            { label: 'Core Version', value: telemetry.systemMetrics.coreVersion, unit: 'nightly' },
           ].map((item, i) => (
             <div key={i}>
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mb-2">{item.label}</h4>

@@ -35,6 +35,7 @@ exports.getModelTelemetry = async (req, res) => {
         const voiceInference = Math.floor(Math.random() * (900 - 800 + 1)) + 800; // 800-900ms
         const textInference = Math.floor(Math.random() * (700 - 500 + 1)) + 500;  // 500-700ms
         const computeLoad = (Math.random() * (75 - 40) + 40).toFixed(1); // 40%-75%
+        const crossModalSync = (Math.random() * (0.19 - 0.08) + 0.08).toFixed(2); // 0.08-0.19
 
         res.json({
             computeLoad: parseFloat(computeLoad),
@@ -42,6 +43,12 @@ exports.getModelTelemetry = async (req, res) => {
                 face: { accuracy: 79.0, valLoss: 0.65, inferenceTime: faceInference },
                 voice: { accuracy: 86.4, valLoss: 0.42, inferenceTime: voiceInference },
                 text: { accuracy: 88.7, valLoss: 0.35, inferenceTime: textInference }
+            },
+            systemMetrics: {
+                crossModalSync: crossModalSync,
+                globalSharding: "100%",
+                encryption: "TLS 1.3",
+                coreVersion: "2.4.0"
             }
         });
     } catch (err) {
