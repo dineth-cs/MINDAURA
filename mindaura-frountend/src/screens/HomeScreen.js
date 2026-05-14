@@ -399,16 +399,16 @@ export default function HomeScreen() {
                 {/* Action Cards Grid */}
                 <View style={styles.cardsGrid}>
                     <View style={styles.cardsRow}>
-                        {/* Card 1: Write a Journal */}
+                        {/* Card 1: Text Scan */}
                         <TouchableOpacity
                             style={[styles.cardContainer, { backgroundColor: cardPurple }]}
-                            onPress={() => navigation.navigate('JournalScreen')}
+                            onPress={() => navigation.navigate('TextScanScreen')}
                         >
                             <View style={styles.iconContainer}>
-                                <Ionicons name="pencil" size={24} color="#6B8EFE" />
+                                <Ionicons name="document-text" size={24} color="#6B8EFE" />
                             </View>
-                            <Text style={[styles.cardTitle, { color: currentTheme.text }]}>Write a Journal</Text>
-                            <Text style={[styles.cardSubtitle, { color: currentTheme.subText }]}>Empty your mind...</Text>
+                            <Text style={[styles.cardTitle, { color: currentTheme.text }]}>Text Scan</Text>
+                            <Text style={[styles.cardSubtitle, { color: currentTheme.subText }]}>Type your thoughts...</Text>
                         </TouchableOpacity>
 
                         {/* Card 2: Record Voice */}

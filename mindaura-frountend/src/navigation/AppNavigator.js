@@ -19,7 +19,7 @@ import HelpSupportScreen from '../screens/HelpSupportScreen';
 import BreathingScreen from '../screens/BreathingScreen';
 import VoiceScreen from '../screens/VoiceScreen';
 import FaceScreen from '../screens/FaceScreen';
-import JournalScreen from '../screens/JournalScreen';
+import TextScanScreen from '../screens/TextScanScreen';
 import RecommendationsScreen from '../screens/RecommendationsScreen';
 import ProgressReportScreen from '../screens/ProgressReportScreen';
 
@@ -37,7 +37,7 @@ function AuthenticatedApp() {
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="RecordVoiceScreen" component={VoiceScreen} />
             <Stack.Screen name="ScanFaceScreen" component={FaceScreen} />
-            <Stack.Screen name="JournalScreen" component={JournalScreen} />
+            <Stack.Screen name="TextScanScreen" component={TextScanScreen} />
             <Stack.Screen name="RecommendationsScreen" component={RecommendationsScreen} />
             <Stack.Screen name="BreathingScreen" component={BreathingScreen} />
             <Stack.Screen name="ProgressReportScreen" component={ProgressReportScreen} />

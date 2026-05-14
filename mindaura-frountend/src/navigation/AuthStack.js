@@ -8,7 +8,7 @@ import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import MainTabs from './MainTabs';
-import JournalScreen from '../screens/JournalScreen';
+import TextScanScreen from '../screens/TextScanScreen';
 import VoiceScreen from '../screens/VoiceScreen';
 import FaceScreen from '../screens/FaceScreen';
 import BreathingScreen from '../screens/BreathingScreen';
@@ -41,7 +41,7 @@ export default function AuthStack() {
             <Stack.Screen name="OTPVerificationScreen" component={OTPVerificationScreen} />
             <Stack.Screen name="ResetPasswordScreen" component={ResetPasswordScreen} />
             <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen name="JournalScreen" component={JournalScreen} />
+            <Stack.Screen name="TextScanScreen" component={TextScanScreen} />
             <Stack.Screen name="RecordVoiceScreen" component={VoiceScreen} />
             <Stack.Screen name="ScanFaceScreen" component={FaceScreen} />
             <Stack.Screen name="BreathingScreen" component={BreathingScreen} />
