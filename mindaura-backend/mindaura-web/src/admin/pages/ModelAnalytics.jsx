@@ -40,17 +40,28 @@ const ModelCard = ({ name, description, metrics, icon: Icon, accent }) => (
 );
 
 export default function ModelAnalytics() {
-  const [stats, setStats] = useState({ latency: 42 });
-  const [jitter, setJitter] = useState(0);
+  const [telemetry, setTelemetry] = useState({
+    computeLoad: 42.8,
+    models: {
+      face: { accuracy: 79.0, valLoss: 0.65, inferenceTime: 450 },
+      voice: { accuracy: 86.4, valLoss: 0.42, inferenceTime: 850 },
+      text: { accuracy: 88.7, valLoss: 0.35, inferenceTime: 600 }
+    }
+  });
 
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(() => setJitter(Math.random() * 0.5), 2000);
+    fetchTelemetry();
+    const interval = setInterval(fetchTelemetry, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchStats = async () => {
-    try { const { data } = await axiosInstance.get('/admin/stats'); setStats(data); } catch (e) {}
+  const fetchTelemetry = async () => {
+    try { 
+      const { data } = await axiosInstance.get('/admin/model-telemetry'); 
+      setTelemetry(data); 
+    } catch (e) {
+      console.error("Failed to fetch model telemetry", e);
+    }
   };
 
   const models = [
@@ -59,9 +70,9 @@ export default function ModelAnalytics() {
       description: 'CNN-based neural core for real-time micro-expression analysis.',
       icon: User, accent: 'bg-gradient-to-r from-pink-500 to-rose-500',
       metrics: [
-        { label: 'Accuracy', value: (98.4 + jitter).toFixed(1), unit: '%', icon: <Target size={13} className="text-pink-500" /> },
-        { label: 'Val. Loss', value: (0.042 - jitter / 10).toFixed(3), unit: 'avg', icon: <FiActivity size={13} className="text-purple-500" /> },
-        { label: 'Inference', value: stats.latency || 42, unit: 'ms', icon: <FiZap size={13} className="text-amber-500" /> }
+        { label: 'Accuracy', value: telemetry.models.face.accuracy.toFixed(1), unit: '%', icon: <Target size={13} className="text-pink-500" /> },
+        { label: 'Val. Loss', value: telemetry.models.face.valLoss.toFixed(2), unit: 'avg', icon: <FiActivity size={13} className="text-purple-500" /> },
+        { label: 'Inference', value: telemetry.models.face.inferenceTime, unit: 'ms', icon: <FiZap size={13} className="text-amber-500" /> }
       ]
     },
     {
@@ -69,9 +80,9 @@ export default function ModelAnalytics() {
       description: 'Multi-layer waveform processing for auditory prosody and tone detection.',
       icon: Mic, accent: 'bg-gradient-to-r from-blue-500 to-indigo-500',
       metrics: [
-        { label: 'Accuracy', value: (94.2 + jitter).toFixed(1), unit: '%', icon: <Target size={13} className="text-blue-500" /> },
-        { label: 'Val. Loss', value: (0.115 + jitter / 10).toFixed(3), unit: 'avg', icon: <FiActivity size={13} className="text-indigo-500" /> },
-        { label: 'Inference', value: (stats.latency * 3.5 || 156).toFixed(0), unit: 'ms', icon: <FiZap size={13} className="text-emerald-500" /> }
+        { label: 'Accuracy', value: telemetry.models.voice.accuracy.toFixed(1), unit: '%', icon: <Target size={13} className="text-blue-500" /> },
+        { label: 'Val. Loss', value: telemetry.models.voice.valLoss.toFixed(2), unit: 'avg', icon: <FiActivity size={13} className="text-indigo-500" /> },
+        { label: 'Inference', value: telemetry.models.voice.inferenceTime, unit: 'ms', icon: <FiZap size={13} className="text-emerald-500" /> }
       ]
     },
     {
@@ -79,9 +90,9 @@ export default function ModelAnalytics() {
       description: 'Transformer architecture for lexical sentiment and linguistic grounding.',
       icon: MessageSquare, accent: 'bg-gradient-to-r from-purple-500 to-violet-500',
       metrics: [
-        { label: 'Accuracy', value: (99.1 + jitter / 2).toFixed(1), unit: '%', icon: <Target size={13} className="text-emerald-500" /> },
-        { label: 'Val. Loss', value: (0.021 - jitter / 20).toFixed(3), unit: 'avg', icon: <FiActivity size={13} className="text-rose-500" /> },
-        { label: 'Inference', value: (stats.latency * 0.6 || 28).toFixed(0), unit: 'ms', icon: <FiZap size={13} className="text-orange-500" /> }
+        { label: 'Accuracy', value: telemetry.models.text.accuracy.toFixed(1), unit: '%', icon: <Target size={13} className="text-emerald-500" /> },
+        { label: 'Val. Loss', value: telemetry.models.text.valLoss.toFixed(2), unit: 'avg', icon: <FiActivity size={13} className="text-rose-500" /> },
+        { label: 'Inference', value: telemetry.models.text.inferenceTime, unit: 'ms', icon: <FiZap size={13} className="text-orange-500" /> }
       ]
     }
   ];
@@ -99,7 +110,7 @@ export default function ModelAnalytics() {
           </div>
           <div>
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Compute Load</span>
-            <span className="text-lg font-black text-gray-800">42.8%</span>
+            <span className="text-lg font-black text-gray-800">{telemetry.computeLoad.toFixed(1)}%</span>
           </div>
         </div>
       </div>

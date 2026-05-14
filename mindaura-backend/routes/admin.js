@@ -10,6 +10,7 @@ router.use(admin);
 // Analytics Routes
 router.get('/analytics/user-growth', adminController.getUserGrowth);
 router.get('/analytics/mood-distribution', adminController.getMoodDistribution);
+router.get('/model-telemetry', adminController.getModelTelemetry);
 
 // User Management Actions
 router.put('/users/:id/suspend', adminController.suspendUser);
