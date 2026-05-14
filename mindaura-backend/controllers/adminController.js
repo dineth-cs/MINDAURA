@@ -70,6 +70,11 @@ exports.getUserGrowth = async (req, res) => {
             users: item.users
         }));
 
+        // CRUCIAL FIX: Recharts needs at least 2 points to draw a line/curve.
+        if (formattedData.length === 1) {
+            formattedData.unshift({ date: 'Start', users: 0 });
+        }
+
         res.json(formattedData);
     } catch (err) {
         console.error(err);
