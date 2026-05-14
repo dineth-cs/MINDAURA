@@ -76,9 +76,9 @@ export default function ModelAnalytics() {
       description: 'CNN-based neural core for real-time micro-expression analysis.',
       icon: User, accent: 'bg-gradient-to-r from-pink-500 to-rose-500',
       metrics: [
-        { label: 'Accuracy', value: telemetry.models.face.accuracy.toFixed(1), unit: '%', icon: <Target size={13} className="text-pink-500" /> },
-        { label: 'Val. Loss', value: telemetry.models.face.valLoss.toFixed(2), unit: 'avg', icon: <FiActivity size={13} className="text-purple-500" /> },
-        { label: 'Inference', value: telemetry.models.face.inferenceTime, unit: 'ms', icon: <FiZap size={13} className="text-amber-500" /> }
+        { label: 'Accuracy', value: telemetry?.models?.face?.accuracy?.toFixed(1) || '0.0', unit: '%', icon: <Target size={13} className="text-pink-500" /> },
+        { label: 'Val. Loss', value: telemetry?.models?.face?.valLoss?.toFixed(2) || '0.00', unit: 'avg', icon: <FiActivity size={13} className="text-purple-500" /> },
+        { label: 'Inference', value: telemetry?.models?.face?.inferenceTime || 0, unit: 'ms', icon: <FiZap size={13} className="text-amber-500" /> }
       ]
     },
     {
@@ -86,9 +86,9 @@ export default function ModelAnalytics() {
       description: 'Multi-layer waveform processing for auditory prosody and tone detection.',
       icon: Mic, accent: 'bg-gradient-to-r from-blue-500 to-indigo-500',
       metrics: [
-        { label: 'Accuracy', value: telemetry.models.voice.accuracy.toFixed(1), unit: '%', icon: <Target size={13} className="text-blue-500" /> },
-        { label: 'Val. Loss', value: telemetry.models.voice.valLoss.toFixed(2), unit: 'avg', icon: <FiActivity size={13} className="text-indigo-500" /> },
-        { label: 'Inference', value: telemetry.models.voice.inferenceTime, unit: 'ms', icon: <FiZap size={13} className="text-emerald-500" /> }
+        { label: 'Accuracy', value: telemetry?.models?.voice?.accuracy?.toFixed(1) || '0.0', unit: '%', icon: <Target size={13} className="text-blue-500" /> },
+        { label: 'Val. Loss', value: telemetry?.models?.voice?.valLoss?.toFixed(2) || '0.00', unit: 'avg', icon: <FiActivity size={13} className="text-indigo-500" /> },
+        { label: 'Inference', value: telemetry?.models?.voice?.inferenceTime || 0, unit: 'ms', icon: <FiZap size={13} className="text-emerald-500" /> }
       ]
     },
     {
@@ -96,9 +96,9 @@ export default function ModelAnalytics() {
       description: 'Transformer architecture for lexical sentiment and linguistic grounding.',
       icon: MessageSquare, accent: 'bg-gradient-to-r from-purple-500 to-violet-500',
       metrics: [
-        { label: 'Accuracy', value: telemetry.models.text.accuracy.toFixed(1), unit: '%', icon: <Target size={13} className="text-emerald-500" /> },
-        { label: 'Val. Loss', value: telemetry.models.text.valLoss.toFixed(2), unit: 'avg', icon: <FiActivity size={13} className="text-rose-500" /> },
-        { label: 'Inference', value: telemetry.models.text.inferenceTime, unit: 'ms', icon: <FiZap size={13} className="text-orange-500" /> }
+        { label: 'Accuracy', value: telemetry?.models?.text?.accuracy?.toFixed(1) || '0.0', unit: '%', icon: <Target size={13} className="text-emerald-500" /> },
+        { label: 'Val. Loss', value: telemetry?.models?.text?.valLoss?.toFixed(2) || '0.00', unit: 'avg', icon: <FiActivity size={13} className="text-rose-500" /> },
+        { label: 'Inference', value: telemetry?.models?.text?.inferenceTime || 0, unit: 'ms', icon: <FiZap size={13} className="text-orange-500" /> }
       ]
     }
   ];
@@ -116,7 +116,7 @@ export default function ModelAnalytics() {
           </div>
           <div>
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block">Compute Load</span>
-            <span className="text-lg font-black text-gray-800">{telemetry.computeLoad.toFixed(1)}%</span>
+            <span className="text-lg font-black text-gray-800">{telemetry?.computeLoad?.toFixed(1) || '0.0'}%</span>
           </div>
         </div>
       </div>
@@ -136,10 +136,10 @@ export default function ModelAnalytics() {
         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">System Performance Metrics</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-white">
           {[
-            { label: 'Cross-Modal Sync', value: telemetry.systemMetrics.crossModalSync, unit: 'variance' },
-            { label: 'Global Sharding', value: telemetry.systemMetrics.globalSharding, unit: 'deployed' },
-            { label: 'Encryption', value: telemetry.systemMetrics.encryption, unit: 'secured' },
-            { label: 'Core Version', value: telemetry.systemMetrics.coreVersion, unit: 'nightly' },
+            { label: 'Cross-Modal Sync', value: telemetry?.systemMetrics?.crossModalSync || '0.00', unit: 'variance' },
+            { label: 'Global Sharding', value: telemetry?.systemMetrics?.globalSharding || 'N/A', unit: 'deployed' },
+            { label: 'Encryption', value: telemetry?.systemMetrics?.encryption || 'N/A', unit: 'secured' },
+            { label: 'Core Version', value: telemetry?.systemMetrics?.coreVersion || 'N/A', unit: 'nightly' },
           ].map((item, i) => (
             <div key={i}>
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mb-2">{item.label}</h4>
