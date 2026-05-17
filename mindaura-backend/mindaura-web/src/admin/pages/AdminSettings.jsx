@@ -74,7 +74,7 @@ export default function AdminSettings() {
 
   const handleEditClick = (field, currentValue) => {
     setModalConfig({
-      title: field === 'name' ? 'Update Administrator Name' : 'Update Email Address',
+      title: 'Update Administrator Name',
       field,
       currentValue
     });
@@ -182,15 +182,6 @@ export default function AdminSettings() {
                       <p className="text-xs text-gray-400 font-medium mt-0.5">Currently: {admin?.name || 'N/A'}</p>
                     </div>
                     <button onClick={() => handleEditClick('name', admin?.name)} className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all">
-                      <FiEdit2 size={12} /> Edit
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-700">Notification Email</h3>
-                      <p className="text-xs text-gray-400 font-medium mt-0.5">Currently: {admin?.email || 'N/A'}</p>
-                    </div>
-                    <button onClick={() => handleEditClick('email', admin?.email)} className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all">
                       <FiEdit2 size={12} /> Edit
                     </button>
                   </div>
@@ -312,7 +303,7 @@ export default function AdminSettings() {
             <h3 className="text-xl font-black text-gray-800 mb-1">{modalConfig.title}</h3>
             <p className="text-sm text-gray-500 font-medium mb-6">Enter the new {modalConfig.field} for your account.</p>
             <input
-              type={modalConfig.field === 'email' ? 'email' : 'text'}
+              type="text"
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               disabled={isSaving}
