@@ -27,6 +27,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+from contextlib import asynccontextmanager
 
 # ── Audio / signal processing ─────────────────────────────────────────────────
 import speech_recognition as sr
@@ -50,6 +51,12 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 # =============================================================================
 #  FastAPI Application
 # =============================================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Launch the background model-loading thread when the app starts."""
+    threading.Thread(target=load_models_in_background, daemon=True).start()
+    yield
+
 app = FastAPI(
     title="MindAura Multimodal Emotion Recognition API",
     description=(
@@ -57,6 +64,7 @@ app = FastAPI(
         "model for robust, multimodal emotion recognition."
     ),
     version="3.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -107,13 +115,13 @@ def load_models_in_background():
         from tensorflow.keras.models import load_model  # type: ignore
 
         # ── Voice / Acoustic Model (VGG16 trained on Mel-Spectrograms) ──────────
-        voice_model_path = "./Models/mindaura_vgg16_perfect.h5"
+        voice_model_path = "./Models/mindaura_audio_vgg16_final.h5"
         print(f"  Loading Voice Model (VGG16) from {voice_model_path} …")
         voice_model = load_model(voice_model_path)
         print(f" Voice model loaded.  Output shape: {voice_model.output_shape}")
 
         # ── Face Model (VGG16 trained on face images) — optional endpoint ────────
-        face_model_path = "./Models/mindaura_vgg16_perfect.h5"
+        face_model_path = "./Models/mindaura_vgg16_perfect_accuracy.h5"
         print(f" Loading Face Model (VGG16) from {face_model_path} …")
         face_model = load_model(face_model_path)
         print(f" Face model loaded.")
@@ -135,10 +143,7 @@ def load_models_in_background():
         # models_ready remains False → endpoints will return 503
 
 
-@app.on_event("startup")
-def startup_event():
-    """Launch the background model-loading thread when the app starts."""
-    threading.Thread(target=load_models_in_background, daemon=True).start()
+
 
 
 # =============================================================================
