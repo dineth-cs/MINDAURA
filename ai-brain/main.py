@@ -1,6 +1,6 @@
 # =============================================================================
 #  MindAura AI Backend — Multimodal Emotion Recognition Engine
-#  Version: 3.1 — Full Rewrite (RoBERTa + VGG16 Fusion) + Face Index Fix
+#  Version: 3.2 — Full Rewrite (RoBERTa + VGG16 Fusion) + OpenCV Face Detection
 #
 #  Endpoints:
 #    GET  /          → Health check (model warm-up status)
@@ -63,7 +63,7 @@ app = FastAPI(
         "Fuses a PyTorch RoBERTa text model and a TensorFlow/Keras VGG16 voice "
         "model for robust, multimodal emotion recognition."
     ),
-    version="3.1.0",
+    version="3.2.0",
     lifespan=lifespan,
 )
 
@@ -220,7 +220,8 @@ def health_check():
             "status":  "ready",
             "message": "MindAura Multimodal AI is Ready! ",
             "models": {
-                "voice_model":  "mindaura_vgg16_perfect.h5 (TensorFlow/Keras)",
+                "voice_model":  "mindaura_audio_vgg16_final.h5 (TensorFlow/Keras)",
+                "face_model":   "mindaura_vgg16_perfect_accuracy.h5 (TensorFlow/Keras)",
                 "text_model":   "mindaura_roberta_mega_model (PyTorch/HuggingFace)",
             },
             "emotion_classes": EMOTION_CLASSES,
@@ -393,12 +394,13 @@ async def predict(file: UploadFile = File(...)):
 
 
 # =============================================================================
-#  POST /predict/face  —  Standalone VGG16 Face Emotion
+#  POST /predict/face  —  Standalone VGG16 Face Emotion (WITH FACE DETECTION)
 # =============================================================================
 @app.post("/predict/face")
 async def predict_face(file: UploadFile = File(...)):
     """
-    Accepts a JPEG/PNG image upload and runs the VGG16 face emotion model.
+    Accepts an image upload, DETECTS if a face is present, crops the face, 
+    and runs the VGG16 face emotion model.
     """
     if not models_ready:
         raise HTTPException(
@@ -415,12 +417,30 @@ async def predict_face(file: UploadFile = File(...)):
         if img is None:
             raise HTTPException(status_code=400, detail="Invalid image file. Could not decode.")
 
-        # Resize → BGR→RGB → VGG16 preprocess_input
-        img_resized  = cv2.resize(img, (224, 224))
+        # 1. FACE DETECTION LOGIC (OpenCV Haar Cascade)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Detect faces
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+        if len(faces) == 0:
+            # Reject if no face is found
+            raise HTTPException(status_code=400, detail="No face detected in the image. Please upload a clear face.")
+
+        # 2. CROP THE LARGEST FACE
+        # If multiple faces are detected, we select the largest one (likely the user)
+        largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
+        x, y, w, h = largest_face
+        face_cropped = img[y:y+h, x:x+w]
+
+        # 3. Resize → BGR→RGB → VGG16 preprocess_input (sending ONLY the cropped face)
+        img_resized  = cv2.resize(face_cropped, (224, 224))
         img_rgb      = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
         img_array    = np.expand_dims(img_rgb.astype("float32"), axis=0)
         img_prepared = preprocess_input(img_array)
 
+        # 4. Predict Emotion
         face_probs  = vgg16_predict_probs(face_model, img_prepared)
         max_idx     = int(np.argmax(face_probs))
         confidence  = float(face_probs[max_idx]) * 100.0
