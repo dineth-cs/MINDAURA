@@ -70,10 +70,7 @@ export default function AppNavigator() {
     }, []);
 
     return (
-        <NavigationContainer 
-            ref={navigationRef}
-            key={userToken ? 'authenticated' : 'unauthenticated'}
-        >
+        <NavigationContainer ref={navigationRef}>
             {/* 1. If suspended, completely block app access and show SuspendedScreen */}
             {isSuspended ? (
                 <Stack.Navigator screenOptions={{ headerShown: false }}>

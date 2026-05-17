@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { FiSettings, FiSliders, FiDatabase, FiShield, FiBell, FiUser, FiEdit2, FiLock, FiHardDrive, FiActivity, FiSave, FiCheckCircle, FiTrash2, FiRefreshCw } from 'react-icons/fi';
+import { FiSettings, FiSliders, FiDatabase, FiBell, FiUser, FiEdit2, FiLock, FiHardDrive, FiActivity, FiSave, FiCheckCircle, FiTrash2, FiRefreshCw } from 'react-icons/fi';
 import axiosInstance from '../../utils/axiosInstance';
 import { toast } from 'react-hot-toast';
 import { UserContext } from '../../shared/context/UserContext';
@@ -26,9 +26,7 @@ export default function AdminSettings() {
     return saved !== null ? saved : '140ms';
   });
 
-  // Security Settings State
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
-  const [twoFactorAuth, setTwoFactorAuth] = useState(false);
+
 
   // Notifications State
   const [errorAlerts, setErrorAlerts] = useState(true);
@@ -93,23 +91,6 @@ export default function AdminSettings() {
     }
   };
 
-  const handlePasswordChange = async (e) => {
-    e.preventDefault();
-    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-      toast.error("Please fill in all password fields");
-      return;
-    }
-    try {
-      setIsSaving(true);
-      await axiosInstance.put('/admin/change-password', passwordForm);
-      toast.success("Password updated successfully");
-      setPasswordForm({ currentPassword: '', newPassword: '' });
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to update password");
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const handleBackup = () => {
     toast.promise(
@@ -148,7 +129,6 @@ export default function AdminSettings() {
 
   const navItems = [
     { label: 'General', icon: <FiSettings size={15} /> },
-    { label: 'Security', icon: <FiShield size={15} /> },
     { label: 'Notifications', icon: <FiBell size={15} /> },
     { label: 'Data & Storage', icon: <FiDatabase size={15} /> },
   ];
@@ -244,57 +224,6 @@ export default function AdminSettings() {
             </div>
           )}
 
-          {activeTab === 'Security' && (
-            <div className="space-y-5">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-horizon p-6">
-                <div className="flex items-center gap-3 mb-5 pb-5 border-b border-gray-50">
-                  <div className="p-2.5 rounded-xl bg-purple-50">
-                    <FiLock className="text-purple-500" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-black text-gray-800">Account Security</h2>
-                    <p className="text-xs text-gray-500 font-medium">Update password and manage security layers.</p>
-                  </div>
-                </div>
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-400 uppercase mb-1 block">Current Password</label>
-                    <input 
-                      type="password" 
-                      value={passwordForm.currentPassword}
-                      onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50 text-sm focus:outline-none focus:border-purple-300 focus:bg-white transition-all"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-400 uppercase mb-1 block">New Password</label>
-                    <input 
-                      type="password" 
-                      value={passwordForm.newPassword}
-                      onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50 text-sm focus:outline-none focus:border-purple-300 focus:bg-white transition-all"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  <button 
-                    disabled={isSaving}
-                    className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl text-xs font-bold shadow-brand hover:opacity-90 transition-all flex items-center justify-center gap-2"
-                  >
-                    {isSaving ? <FiRefreshCw className="animate-spin" /> : <FiSave />} Save New Password
-                  </button>
-                </form>
-
-                <div className="mt-8 pt-8 border-t border-gray-50 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700">Two-Factor Authentication</h3>
-                    <p className="text-xs text-gray-400 font-medium mt-0.5">Adds an extra layer of security to your login.</p>
-                  </div>
-                  <Toggle value={twoFactorAuth} onToggle={() => setTwoFactorAuth(!twoFactorAuth)} />
-                </div>
-              </div>
-            </div>
-          )}
 
           {activeTab === 'Notifications' && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-horizon p-6">

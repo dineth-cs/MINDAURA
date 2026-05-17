@@ -3,8 +3,10 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityInd
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthContext } from '../context/AuthContext';
 
 const SignUpScreen = ({ navigation }) => {
+    const { signIn } = React.useContext(AuthContext);
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -50,7 +52,9 @@ const SignUpScreen = ({ navigation }) => {
                 setPassword('');
                 setConfirmPassword('');
                 // Navigate directly to the main app flow
-                navigation.replace('MainTabs');
+                if (token) {
+                    await signIn(token, response.data.user);
+                }
             }
         } catch (error) {
             const errorMessage = error.response?.data?.message || error.message || 'Something went wrong during registration.';

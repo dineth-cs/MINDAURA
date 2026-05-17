@@ -17,10 +17,12 @@ import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserContext } from '../context/UserContext';
+import { AuthContext } from '../context/AuthContext';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
   const { updateUserContext } = useContext(UserContext);
+  const { signIn } = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -55,10 +57,7 @@ export default function LoginScreen() {
         });
 
         Alert.alert('Success', 'Login Successful!');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
+        await signIn(data.token, data);
       }
     } catch (error) {
       Alert.alert('Error', 'Invalid email or password');
