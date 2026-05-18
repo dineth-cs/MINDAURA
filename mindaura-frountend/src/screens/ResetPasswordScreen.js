@@ -15,6 +15,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import axios from 'axios';
+import { API_URL } from '../config/api';
 
 export default function ResetPasswordScreen() {
     const navigation = useNavigation();
@@ -46,29 +48,26 @@ export default function ResetPasswordScreen() {
         setLoading(true);
 
         try {
-            const response = await fetch('https://mindaura-wfut.onrender.com/api/auth/reset-password', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ email, otp, newPassword: password }),
+            const response = await axios.post(`${API_URL}/api/auth/reset-password`, {
+                email,
+                otp,
+                newPassword: password
             });
 
             if (response.status === 200) {
                 Alert.alert('Success', 'Password updated successfully!', [
                     { text: 'OK', onPress: () => navigation.navigate('Login') }
                 ]);
-            } else {
-                let errorMessage = 'Failed to reset password. Please try again.';
-                try {
-                    const data = await response.json();
-                    if (data.message) errorMessage = data.message;
-                } catch (e) { }
-                Alert.alert('Error', errorMessage);
             }
         } catch (error) {
             console.error('Error resetting password:', error);
-            Alert.alert('Error', 'An error occurred. Please check your network and try again.');
+            let errorMessage = 'An error occurred. Please check your network and try again.';
+            if (error.response && error.response.data && error.response.data.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            Alert.alert('Error', errorMessage);
         } finally {
             setLoading(false);
         }
