@@ -32,7 +32,7 @@ export default function ForgotPasswordScreen() {
         setLoading(true);
 
         try {
-            const response = await axios.post(`${API_URL}/api/auth/forgot-password`, {
+            const response = await axios.post(`${API_URL}/api/v1/auth/forgot-password`, {
                 email: email.trim(),
             });
 

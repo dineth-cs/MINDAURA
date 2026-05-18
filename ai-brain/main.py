@@ -29,6 +29,9 @@ from pydantic import BaseModel
 import uvicorn
 from contextlib import asynccontextmanager
 
+# ── Import Auth Router ────────────────────────────────────────────────────────
+from auth import auth_router
+
 # ── Audio / signal processing ─────────────────────────────────────────────────
 import speech_recognition as sr
 import librosa
@@ -73,6 +76,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Mount Auth Router ─────────────────────────────────────────────────────────
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 
 
 # =============================================================================

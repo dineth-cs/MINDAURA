@@ -4,6 +4,7 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
+import { API_ENDPOINTS } from '../config/api';
 
 const SignUpScreen = ({ navigation }) => {
     const { signIn } = React.useContext(AuthContext);
@@ -35,7 +36,7 @@ const SignUpScreen = ({ navigation }) => {
         setIsLoading(true);
 
         try {
-            const response = await axios.post('https://mindaura-wfut.onrender.com/api/auth/register', {
+            const response = await axios.post(API_ENDPOINTS.AUTH.REGISTER, {
                 name,
                 email,
                 password,

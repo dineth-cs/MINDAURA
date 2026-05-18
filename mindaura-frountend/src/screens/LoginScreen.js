@@ -18,6 +18,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserContext } from '../context/UserContext';
 import { AuthContext } from '../context/AuthContext';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -34,7 +35,7 @@ export default function LoginScreen() {
     }
 
     try {
-      const response = await axios.post('https://mindaura-wfut.onrender.com/api/auth/login', {
+      const response = await axios.post(API_ENDPOINTS.AUTH.LOGIN, {
         email,
         password,
       });
