@@ -1,9 +1,9 @@
-//  Production backend (Render) for Auth, DB, etc.
+// Production backend (Render) for Auth, DB, etc.
 // For local development (Android Emulator): http://10.0.2.2:5000
 // For local development (iOS Simulator): http://localhost:5000
 export const API_URL = 'https://mindaura-wfut.onrender.com';
 
-//  AI Model Backend (Hugging Face Spaces - Production)
+// AntiGravity Engine - AI Model Backend (Hugging Face Spaces - Production)
 export const AI_BASE_URL = 'https://dinethhasaranga-mindaura-api.hf.space';
 
 export const API_ENDPOINTS = {

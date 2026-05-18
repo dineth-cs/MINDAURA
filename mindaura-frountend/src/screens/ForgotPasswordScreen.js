@@ -15,6 +15,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import axios from 'axios';
+import { API_URL } from '../config/api';
 
 export default function ForgotPasswordScreen() {
     const [email, setEmail] = useState('');
@@ -30,27 +32,22 @@ export default function ForgotPasswordScreen() {
         setLoading(true);
 
         try {
-            const response = await fetch('https://mindaura-wfut.onrender.com/api/auth/forgot-password', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ email: email.trim() }),
+            const response = await axios.post(`${API_URL}/api/auth/forgot-password`, {
+                email: email.trim(),
             });
 
             if (response.status === 200) {
                 navigation.navigate('OTPVerificationScreen', { email: email.trim() });
-            } else {
-                let errorMessage = 'Failed to send OTP. Please try again.';
-                try {
-                    const data = await response.json();
-                    if (data.message) errorMessage = data.message;
-                } catch (e) { }
-                Alert.alert('Error', errorMessage);
             }
         } catch (error) {
             console.error('Error sending OTP:', error);
-            Alert.alert('Error', 'An error occurred. Please check your network and try again.');
+            let errorMessage = 'An error occurred. Please check your network and try again.';
+            if (error.response && error.response.data && error.response.data.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            Alert.alert('Error', errorMessage);
         } finally {
             setLoading(false);
         }

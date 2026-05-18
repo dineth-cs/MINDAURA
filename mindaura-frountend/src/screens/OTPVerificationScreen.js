@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
+import { API_URL } from '../config/api';
 
 export default function OTPVerificationScreen() {
     const navigation = useNavigation();
@@ -59,7 +60,7 @@ export default function OTPVerificationScreen() {
 
         setIsLoading(true);
         try {
-            const response = await axios.post('https://mindaura-wfut.onrender.com/api/auth/verify-otp', {
+            const response = await axios.post(`${API_URL}/api/auth/verify-otp`, {
                 email: email,
                 otp: otpString,
             });
