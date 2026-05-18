@@ -8,7 +8,7 @@ import io from 'socket.io-client';
 import { UserContext } from '../../shared/context/UserContext';
 
 export default function AdminDashboardLayout() {
-  const { user } = useContext(UserContext);
+  const { user, logout } = useContext(UserContext);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
@@ -34,8 +34,11 @@ export default function AdminDashboardLayout() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('userToken');
-    navigate('/admin/login');
+    // Call context logout — clears both localStorage AND React user state atomically.
+    // Using replace:true resets the history stack so the admin cannot press Back
+    // and return to the dashboard after signing out.
+    logout();
+    navigate('/admin/login', { replace: true });
   };
 
   const navItems = [
