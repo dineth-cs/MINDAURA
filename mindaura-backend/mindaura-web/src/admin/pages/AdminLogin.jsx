@@ -13,7 +13,6 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -107,22 +106,6 @@ export default function AdminLogin() {
                   {showPassword ? <FiEyeOff className="text-sm" /> : <FiEye className="text-sm" />}
                 </button>
               </div>
-            </div>
-
-            {/* Remember me / Forgot */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 accent-purple-600 cursor-pointer"
-                />
-                <span className="text-sm text-gray-600 font-medium group-hover:text-gray-800 transition-colors">Remember me</span>
-              </label>
-              <a href="#" className="text-sm font-semibold text-blue-600 hover:text-purple-600 transition-colors">
-                Forgot password?
-              </a>
             </div>
 
             {/* Submit */}
