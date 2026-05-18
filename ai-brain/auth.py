@@ -5,7 +5,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -27,7 +27,13 @@ if not MONGO_URI:
     print("Warning: MONGO_URI is not set. Auth routes will fail.")
 
 client = AsyncIOMotorClient(MONGO_URI)
-db = client.get_default_database() if MONGO_URI and client.get_default_database().name else client["mindaura"]
+
+# CRITICAL FIX: Safe database selection to avoid ConfigurationError
+try:
+    db = client.get_default_database()
+except Exception:
+    db = client["mindaura"]  # Fallback database name if not specified in connection string
+
 users_collection = db["users"]
 
 # Email settings
@@ -49,6 +55,11 @@ class ResetPasswordRequest(BaseModel):
     newPassword: str
 
 class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class RegisterRequest(BaseModel):
+    name: str
     email: EmailStr
     password: str
 
@@ -100,6 +111,91 @@ def send_otp_email_sync(to_email: str, user_name: str, otp: str):
 
 
 # --- Endpoints ---
+
+@auth_router.get("/me")
+async def get_me(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("userId")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+            
+        from bson import ObjectId
+        user = await users_collection.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+            
+        return {
+            "user": {
+                "_id": str(user["_id"]),
+                "name": user.get("name"),
+                "email": user.get("email"),
+                "profilePicture": user.get("profilePicture", ""),
+                "dateOfBirth": user.get("dateOfBirth"),
+                "age": user.get("age"),
+                "isAdmin": user.get("isAdmin", False),
+                "status": user.get("status", "ACTIVE")
+            }
+        }
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@auth_router.post("/register")
+async def register(request: RegisterRequest):
+    # Check if user already exists
+    existing_user = await users_collection.find_one({"email": request.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists with this email")
+
+    # Hash the password
+    hashed_password = pwd_context.hash(request.password)
+
+    # Create new user document (matching old Node.js schema)
+    new_user = {
+        "name": request.name,
+        "email": request.email,
+        "password": hashed_password,
+        "profilePicture": "",
+        "isAdmin": False,
+        "status": "ACTIVE",
+        "tier": "TIER 1",
+        "dailyTasks": [],
+        "createdAt": datetime.utcnow(),
+        "updatedAt": datetime.utcnow(),
+    }
+
+    result = await users_collection.insert_one(new_user)
+    
+    # Create JWT token
+    expire = datetime.utcnow() + timedelta(days=7)
+    to_encode = {
+        "userId": str(result.inserted_id),
+        "isAdmin": False,
+        "exp": expire
+    }
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm="HS256")
+
+    user_response = {
+        "_id": str(result.inserted_id),
+        "name": request.name,
+        "email": request.email,
+        "profilePicture": "",
+        "isAdmin": False,
+    }
+
+    return {
+        "message": "User registered successfully",
+        "token": encoded_jwt,
+        "user": user_response
+    }
+
 
 @auth_router.post("/login")
 async def login(request: LoginRequest):
