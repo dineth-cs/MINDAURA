@@ -4,6 +4,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel, EmailStr
@@ -12,7 +13,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 import jwt
 
-# Load environment variables (for local testing; in HF Spaces, they are set in the UI)
+# Load environment variables
 load_dotenv()
 
 # Initialize APIRouter
@@ -28,13 +29,22 @@ if not MONGO_URI:
 
 client = AsyncIOMotorClient(MONGO_URI)
 
-# CRITICAL FIX: Safe database selection to avoid ConfigurationError
+# =============================================================================
+# 100% BULLETPROOF DATABASE SELECTION (Bypasses get_default_database() completely)
+# =============================================================================
+db_name = "mindaura"  # Default fallback database name
 try:
-    db = client.get_default_database()
+    if MONGO_URI:
+        parsed_url = urlparse(MONGO_URI)
+        path_name = parsed_url.path.strip("/")
+        if path_name:
+            db_name = path_name
 except Exception:
-    db = client["mindaura"]  # Fallback database name if not specified in connection string
+    pass
 
+db = client[db_name]
 users_collection = db["users"]
+# =============================================================================
 
 # Email settings
 EMAIL_USER = os.getenv("EMAIL_USER")
@@ -149,15 +159,12 @@ async def get_me(authorization: str = Header(None)):
 
 @auth_router.post("/register")
 async def register(request: RegisterRequest):
-    # Check if user already exists
     existing_user = await users_collection.find_one({"email": request.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists with this email")
 
-    # Hash the password
     hashed_password = pwd_context.hash(request.password)
 
-    # Create new user document (matching old Node.js schema)
     new_user = {
         "name": request.name,
         "email": request.email,
@@ -173,7 +180,6 @@ async def register(request: RegisterRequest):
 
     result = await users_collection.insert_one(new_user)
     
-    # Create JWT token
     expire = datetime.utcnow() + timedelta(days=7)
     to_encode = {
         "userId": str(result.inserted_id),
@@ -203,12 +209,10 @@ async def login(request: LoginRequest):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid Credentials")
 
-    # Verify password (passlib automatically handles $2b$ and Node.js $2a$ bcrypt prefixes)
     is_match = pwd_context.verify(request.password, user["password"])
     if not is_match:
         raise HTTPException(status_code=400, detail="Invalid Credentials")
 
-    # Create JWT token matching the Node.js payload
     expire = datetime.utcnow() + timedelta(days=7)
     to_encode = {
         "userId": str(user["_id"]),
@@ -235,17 +239,14 @@ async def forgot_password(request: ForgotPasswordRequest, background_tasks: Back
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))
     expire_time = datetime.utcnow() + timedelta(minutes=5)
 
-    # Save to MongoDB
     await users_collection.update_one(
         {"_id": user["_id"]},
         {"$set": {"resetPasswordOtp": otp, "resetPasswordExpire": expire_time}}
     )
 
-    # Dispatch email in background so the UI doesn't hang
     user_name = user.get("name", "User")
     background_tasks.add_task(send_otp_email_sync, request.email, user_name, otp)
 
@@ -264,7 +265,6 @@ async def verify_otp(request: VerifyOTPRequest):
     if not stored_otp or not expire_time:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
     
-    # Check if OTP matches and hasn't expired
     if stored_otp != request.otp or datetime.utcnow() > expire_time:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
@@ -286,10 +286,8 @@ async def reset_password(request: ResetPasswordRequest):
     if stored_otp != request.otp or datetime.utcnow() > expire_time:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
-    # Hash the new password
     hashed_password = pwd_context.hash(request.newPassword)
 
-    # Update the password and clear the OTP fields
     await users_collection.update_one(
         {"_id": user["_id"]},
         {
