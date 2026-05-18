@@ -29,8 +29,10 @@ from pydantic import BaseModel
 import uvicorn
 from contextlib import asynccontextmanager
 
-# ── Import Auth Router ────────────────────────────────────────────────────────
-from auth import auth_router
+# ── Import Routers ────────────────────────────────────────────────
+from auth    import auth_router
+from emotion import emotion_router
+from admin   import admin_router
 
 # ── Audio / signal processing ─────────────────────────────────────────────────
 import speech_recognition as sr
@@ -77,8 +79,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Mount Auth Router ─────────────────────────────────────────────────────────
-app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
+# ── Mount Routers ───────────────────────────────────────────────────────────────────
+app.include_router(auth_router,    prefix="/api/v1/auth",    tags=["Authentication"])
+app.include_router(emotion_router, prefix="/api/v1/emotion", tags=["Emotion"])
+app.include_router(admin_router,   prefix="/api/v1/admin",   tags=["Admin"])
 
 
 # =============================================================================

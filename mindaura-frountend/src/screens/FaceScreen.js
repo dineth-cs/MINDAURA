@@ -118,7 +118,6 @@ export default function FaceScreen() {
                     body: formData,
                     headers: {
                         'Content-Type': 'multipart/form-data',
-                        'Bypass-Tunnel-Reminder': 'true',  // bypass Localtunnel warning page
                     },
                 });
 

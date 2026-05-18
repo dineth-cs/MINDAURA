@@ -171,7 +171,6 @@ export default function VoiceScreen() {
                     body: formData,
                     headers: {
                         'Content-Type': 'multipart/form-data',
-                        'Bypass-Tunnel-Reminder': 'true',  // bypass Localtunnel warning page
                     },
                 });
                 if (aiResponse.status === 503) {

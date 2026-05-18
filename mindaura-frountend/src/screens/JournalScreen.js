@@ -97,7 +97,6 @@ export default function JournalScreen() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Bypass-Tunnel-Reminder': 'true',
                     },
                     body: JSON.stringify(requestPayload),
                 });

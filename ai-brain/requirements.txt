@@ -14,7 +14,8 @@ opencv-python-headless>=4.9.0.80   # Headless: no GUI deps (Render-compatible)
 
 # ── Audio Processing ───────────────────────────
 librosa>=0.10.2
-soundfile>=0.12.1   # Backend codec used by librosa
+soundfile>=0.12.1        # Backend codec used by librosa
+SpeechRecognition>=3.10.4  # Google STT for voice branch (imported as speech_recognition)
 
 # ── NLP / Text Model (HuggingFace RoBERTa) ────
 transformers>=4.41.0

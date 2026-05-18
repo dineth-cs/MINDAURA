@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel, EmailStr
-from passlib.context import CryptContext
+import bcrypt  # CRITICAL: Native bcrypt used here (No passlib)
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 import jwt
@@ -19,9 +19,6 @@ load_dotenv()
 # Initialize APIRouter
 auth_router = APIRouter()
 
-# Password hashing context (matching Node.js bcrypt)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # MongoDB connection
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
@@ -29,10 +26,8 @@ if not MONGO_URI:
 
 client = AsyncIOMotorClient(MONGO_URI)
 
-# =============================================================================
-# 100% BULLETPROOF DATABASE SELECTION (Bypasses get_default_database() completely)
-# =============================================================================
-db_name = "mindaura"  # Default fallback database name
+# Bulletproof Database Selection (Matched to your Atlas DB)
+db_name = "test"  
 try:
     if MONGO_URI:
         parsed_url = urlparse(MONGO_URI)
@@ -44,7 +39,6 @@ except Exception:
 
 db = client[db_name]
 users_collection = db["users"]
-# =============================================================================
 
 # Email settings
 EMAIL_USER = os.getenv("EMAIL_USER")
@@ -76,7 +70,6 @@ class RegisterRequest(BaseModel):
 
 # --- Helper Function: Send Email ---
 def send_otp_email_sync(to_email: str, user_name: str, otp: str):
-    """Synchronous function to send email via SMTP. Runs in BackgroundTask."""
     if not EMAIL_USER or not EMAIL_PASS:
         print("Warning: EMAIL_USER or EMAIL_PASS not set. Cannot send OTP.")
         return
@@ -163,7 +156,9 @@ async def register(request: RegisterRequest):
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists with this email")
 
-    hashed_password = pwd_context.hash(request.password)
+    # Native bcrypt hashing
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(request.password.encode('utf-8'), salt).decode('utf-8')
 
     new_user = {
         "name": request.name,
@@ -209,7 +204,16 @@ async def login(request: LoginRequest):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid Credentials")
 
-    is_match = pwd_context.verify(request.password, user["password"])
+    # The AI's Fix: Check if account is suspended
+    if user.get("status", "ACTIVE") == "SUSPENDED":
+        raise HTTPException(status_code=403, detail="Your account has been suspended...")
+
+    # Our Fix: Native bcrypt verification (Handles Node.js $2b$ and $2a$ prefixes perfectly)
+    try:
+        is_match = bcrypt.checkpw(request.password.encode('utf-8'), user["password"].encode('utf-8'))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Credentials")
+
     if not is_match:
         raise HTTPException(status_code=400, detail="Invalid Credentials")
 
@@ -286,7 +290,9 @@ async def reset_password(request: ResetPasswordRequest):
     if stored_otp != request.otp or datetime.utcnow() > expire_time:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
-    hashed_password = pwd_context.hash(request.newPassword)
+    # Native bcrypt hashing for new password
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(request.newPassword.encode('utf-8'), salt).decode('utf-8')
 
     await users_collection.update_one(
         {"_id": user["_id"]},
