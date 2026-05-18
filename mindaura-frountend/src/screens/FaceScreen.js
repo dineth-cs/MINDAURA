@@ -121,21 +121,36 @@ export default function FaceScreen() {
                         'Bypass-Tunnel-Reminder': 'true',  // bypass Localtunnel warning page
                     },
                 });
+
                 if (aiResponse.status === 503) {
                     Alert.alert('AI Warming Up', 'The AI model is still loading. Please try again in a moment.');
                     return;
                 }
-                if (!aiResponse.ok) throw new Error(`AI server error: ${aiResponse.status}`);
+
+                if (!aiResponse.ok) {
+                    let errorDetail = `AI server error: ${aiResponse.status}`;
+                    try {
+                        const errorData = await aiResponse.json();
+                        if (errorData && errorData.detail) {
+                            errorDetail = errorData.detail;
+                        }
+                    } catch (parseErr) {
+                        // ignore JSON parse error
+                    }
+                    Alert.alert('Detection Failed', errorDetail);
+                    setPhoto(null);
+                    setCapturedBase64(null);
+                    return;
+                }
+
                 const aiData = await aiResponse.json();
                 console.log('AI Face Result:', aiData);
                 detectedMood = aiData.emotion || 'Happy';
                 detectedConfidence = aiData.confidence || null;
             } catch (aiErr) {
-                console.warn('AI backend unreachable, using fallback mood:', aiErr.message);
-                Alert.alert(
-                    'AI Unavailable',
-                    'Could not reach the AI server. Saving with a default mood.\n\nError: ' + aiErr.message
-                );
+                console.warn('AI backend unreachable:', aiErr.message);
+                Alert.alert('AI Unavailable', 'Could not reach the AI server.\n\nError: ' + aiErr.message);
+                return;
             }
 
             // ── Step 2: Save the detected mood to the main backend ──

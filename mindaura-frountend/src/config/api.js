@@ -3,8 +3,8 @@
 // For local development (iOS Simulator): http://localhost:5000
 export const API_URL = 'https://mindaura-wfut.onrender.com';
 
-//  AI Model Backend (LocalTunnel - Update this link daily when you start the laptop server)
-export const AI_BASE_URL = 'https://great-tips-bake.loca.lt';
+//  AI Model Backend (Hugging Face Spaces - Production)
+export const AI_BASE_URL = 'https://dinethhasaranga-mindaura-api.hf.space';
 
 export const API_ENDPOINTS = {
     AUTH: {
