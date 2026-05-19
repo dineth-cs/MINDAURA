@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: 'https://mindaura-wfut.onrender.com/api',
+  baseURL: '/api/v1',
 });
 
 // Intercept requests and append active local tokens automatically

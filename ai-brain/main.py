@@ -32,7 +32,7 @@ from contextlib import asynccontextmanager
 # ── Import Routers ────────────────────────────────────────────────
 from auth    import auth_router
 from emotion import emotion_router
-from admin   import admin_router
+from admin   import admin_router, support_router
 
 # ── Audio / signal processing ─────────────────────────────────────────────────
 import speech_recognition as sr
@@ -83,6 +83,7 @@ app.add_middleware(
 app.include_router(auth_router,    prefix="/api/v1/auth",    tags=["Authentication"])
 app.include_router(emotion_router, prefix="/api/v1/emotion", tags=["Emotion"])
 app.include_router(admin_router,   prefix="/api/v1/admin",   tags=["Admin"])
+app.include_router(support_router, prefix="/api/v1/support", tags=["Support"])
 
 
 # =============================================================================
@@ -528,6 +529,27 @@ async def predict_text(request: TextRequest):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Text prediction failed: {str(exc)}")
+
+
+# =============================================================================
+#  Static File Serving (Serving the Vite/React Admin Frontend)
+# =============================================================================
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Mount assets directory (under the directory React build output uses)
+# In production, dist/assets will be moved to the root/assets directory
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+
+@app.get("/{catchall:path}")
+async def serve_react_app(catchall: str):
+    """
+    Catch-all route that serves index.html for client-side React routing.
+    Ignores paths starting with 'api' to let backend API endpoints handle them.
+    """
+    if catchall.startswith("api"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse("index.html")
 
 
 # =============================================================================

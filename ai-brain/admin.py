@@ -27,25 +27,26 @@ import random
 import time
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
-
 import jwt
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Header, Request
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from typing import Optional  # මේක තමයි අඩුවෙලා තිබුණේ
 
 load_dotenv()
 
 admin_router = APIRouter()
+support_router = APIRouter()
 
 # ── MongoDB ───────────────────────────────────────────────────────────────────
 MONGO_URI  = os.getenv("MONGO_URI", "")
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-key-replace-me")
 
 _client = AsyncIOMotorClient(MONGO_URI)
-
 _db_name = "mindaura"
+
 try:
     if MONGO_URI:
         _parsed = urlparse(MONGO_URI)
@@ -61,18 +62,16 @@ mood_col             = _db["moodentries"]
 support_col          = _db["supporttickets"]  # Mongoose pluralises SupportTicket
 audit_col            = _db["auditlogs"]       # Mongoose pluralises AuditLog
 
-
 # ── Pydantic models ───────────────────────────────────────────────────────────
 class FirewallToggleRequest(BaseModel):
     setting: str
     enabled: bool
 
 class UpdateProfileRequest(BaseModel):
-    name: str | None = None
-
+    name: Optional[str] = None
 
 # ── Shared auth helpers ───────────────────────────────────────────────────────
-async def _require_admin(authorization: str | None):
+async def _require_admin(authorization: Optional[str] = None):
     """Decode JWT, verify user exists, verify isAdmin=True."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authorized, no token")
@@ -98,7 +97,6 @@ async def _require_admin(authorization: str | None):
 
     return user
 
-
 def _serialize_user(doc: dict) -> dict:
     """Convert a MongoDB user document to a JSON-safe dict (no password)."""
     doc.pop("password", None)
@@ -113,8 +111,7 @@ def _serialize_user(doc: dict) -> dict:
         "createdAt":      doc["createdAt"].isoformat() if isinstance(doc.get("createdAt"), datetime) else doc.get("createdAt"),
     }
 
-
-async def _write_audit(action: str, target: str, request: Request | None = None):
+async def _write_audit(action: str, target: str, request: Optional[Request] = None):
     """Helper: insert an audit log document."""
     ip = "0.0.0.0"
     if request:
@@ -132,7 +129,6 @@ async def _write_audit(action: str, target: str, request: Request | None = None)
         "updatedAt": datetime.utcnow(),
     })
 
-
 # =============================================================================
 #  GET /stats  —  Dashboard telemetry counters
 # =============================================================================
@@ -143,12 +139,12 @@ async def get_stats(authorization: str = Header(None)):
     Mirrors: adminController.getStats
     """
     await _require_admin(authorization)
-
+    
     user_count        = await users_col.count_documents({})
     pending_tickets   = await support_col.count_documents({"status": "pending"})
     inprogress_tickets = await support_col.count_documents({"status": "in-progress"})
     resolved_tickets  = await support_col.count_documents({"status": "resolved"})
-
+    
     return {
         "userCount": user_count,
         "tickets": {
@@ -160,7 +156,6 @@ async def get_stats(authorization: str = Header(None)):
         "latency": random.randint(10, 30),
     }
 
-
 # =============================================================================
 #  GET /users  —  All users (no passwords)
 # =============================================================================
@@ -171,13 +166,11 @@ async def get_users(authorization: str = Header(None)):
     Mirrors: User.find().select('-password').sort({ createdAt: -1 })
     """
     await _require_admin(authorization)
-
     cursor = users_col.find({}).sort("createdAt", -1)
     users  = []
     async for doc in cursor:
         users.append(_serialize_user(doc))
     return users
-
 
 # =============================================================================
 #  GET /users/{id}/profile-stats  —  Per-user analytics modal
@@ -190,12 +183,12 @@ async def get_user_profile_stats(user_id: str, authorization: str = Header(None)
     Mirrors: adminController.getUserProfileStats
     """
     await _require_admin(authorization)
-
+    
     try:
         oid = ObjectId(user_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid user ID")
-
+        
     user = await users_col.find_one({"_id": oid})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -217,7 +210,7 @@ async def get_user_profile_stats(user_id: str, authorization: str = Header(None)
         {"$match": {"user": oid}},
         {"$group": {"_id": "$source", "count": {"$sum": 1}}},
     ]).to_list(length=10)
-
+    
     modality_colors = {"face": "#a855f7", "voice": "#6366f1", "journal": "#3b82f6"}
     modality_usage  = [
         {
@@ -240,7 +233,7 @@ async def get_user_profile_stats(user_id: str, authorization: str = Header(None)
         },
         {"$sort": {"_id": 1}},
     ]).to_list(length=100)
-
+    
     mood_trend = [
         {"day": item["_id"].split("-")[2], "score": item["count"]}
         for item in trend_agg
@@ -254,7 +247,6 @@ async def get_user_profile_stats(user_id: str, authorization: str = Header(None)
         "moodTrend":     mood_trend,
     }
 
-
 # =============================================================================
 #  PUT /users/{id}/suspend  —  Toggle user suspend/active
 # =============================================================================
@@ -265,31 +257,28 @@ async def suspend_user(user_id: str, request: Request, authorization: str = Head
     Mirrors: adminController.suspendUser
     """
     await _require_admin(authorization)
-
+    
     try:
         oid = ObjectId(user_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid user ID")
-
+        
     user = await users_col.find_one({"_id": oid})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     new_status = "SUSPENDED" if user.get("status", "ACTIVE") == "ACTIVE" else "ACTIVE"
-
     await users_col.update_one(
         {"_id": oid},
         {"$set": {"status": new_status, "updatedAt": datetime.utcnow()}}
     )
-
+    
     await _write_audit(
         action=f"User {user['email']} status toggled to {new_status}",
         target="User Management",
         request=request,
     )
-
     return {**_serialize_user(user), "status": new_status}
-
 
 # =============================================================================
 #  DELETE /users/{id}  —  Cascade delete user + all associated data
@@ -301,12 +290,12 @@ async def delete_user(user_id: str, request: Request, authorization: str = Heade
     Mirrors: adminController.deleteUser (cascade delete via Promise.all)
     """
     await _require_admin(authorization)
-
+    
     try:
         oid = ObjectId(user_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid user ID")
-
+        
     user = await users_col.find_one({"_id": oid})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -315,15 +304,13 @@ async def delete_user(user_id: str, request: Request, authorization: str = Heade
     await users_col.delete_one({"_id": oid})
     await mood_col.delete_many({"user": oid})
     await support_col.delete_many({"user": oid})
-
+    
     await _write_audit(
         action=f"User {user['email']} and all associated data deleted",
         target="User Management",
         request=request,
     )
-
     return {"msg": "User and all associated records removed"}
-
 
 # =============================================================================
 #  GET /analytics/user-growth  —  Static growth data (matches Node.js exactly)
@@ -332,7 +319,6 @@ async def delete_user(user_id: str, request: Request, authorization: str = Heade
 async def get_user_growth(authorization: str = Header(None)):
     """Static user growth dataset — mirrors adminController.getUserGrowth exactly."""
     await _require_admin(authorization)
-
     return {
         "daily": [
             {"name": "Mon", "users": 12}, {"name": "Tue", "users": 19},
@@ -356,7 +342,6 @@ async def get_user_growth(authorization: str = Header(None)):
         ],
     }
 
-
 # =============================================================================
 #  GET /analytics/mood-distribution  —  Live mood breakdown from moodentries
 # =============================================================================
@@ -367,14 +352,13 @@ async def get_mood_distribution(authorization: str = Header(None)):
     Mirrors: adminController.getMoodDistribution
     """
     await _require_admin(authorization)
-
     pipeline = [{"$group": {"_id": "$mood", "count": {"$sum": 1}}}]
     mood_counts = await mood_col.aggregate(pipeline).to_list(length=20)
-
+    
     total = sum(item["count"] for item in mood_counts)
     if total == 0:
         return []
-
+        
     colors = {
         "Happy":   "#3b82f6",
         "Stress":  "#9333ea",
@@ -384,7 +368,6 @@ async def get_mood_distribution(authorization: str = Header(None)):
         "Neutral": "#64748b",
         "Anxious": "#ec4899",
     }
-
     return [
         {
             "name":  item["_id"],
@@ -393,7 +376,6 @@ async def get_mood_distribution(authorization: str = Header(None)):
         }
         for item in mood_counts
     ]
-
 
 # =============================================================================
 #  GET /model-telemetry  —  Simulated AI model metrics
@@ -405,13 +387,14 @@ async def get_model_telemetry(authorization: str = Header(None)):
     Mirrors: adminController.getModelTelemetry (random ranges identical).
     """
     await _require_admin(authorization)
-
+    
     face_inference  = random.randint(400, 500)
     voice_inference = random.randint(800, 900)
     text_inference  = random.randint(500, 700)
+    
     compute_load    = round(random.uniform(40.0, 75.0), 1)
     cross_modal     = round(random.uniform(0.08, 0.19), 2)
-
+    
     return {
         "computeLoad": compute_load,
         "models": {
@@ -427,7 +410,6 @@ async def get_model_telemetry(authorization: str = Header(None)):
         },
     }
 
-
 # =============================================================================
 #  GET /audit-logs  —  Last 100 audit log entries
 # =============================================================================
@@ -438,7 +420,6 @@ async def get_audit_logs(authorization: str = Header(None)):
     Mirrors: AuditLog.find().sort({ createdAt: -1 }).limit(100)
     """
     await _require_admin(authorization)
-
     cursor = audit_col.find({}).sort("createdAt", -1).limit(100)
     logs   = []
     async for doc in cursor:
@@ -454,7 +435,6 @@ async def get_audit_logs(authorization: str = Header(None)):
         })
     return logs
 
-
 # =============================================================================
 #  POST /firewall/toggle  —  Log a firewall toggle action
 # =============================================================================
@@ -466,15 +446,14 @@ async def toggle_firewall(
 ):
     """Mirrors: adminController.toggleFirewall"""
     await _require_admin(authorization)
-
     state = "ON" if body.enabled else "OFF"
+    
     await _write_audit(
         action=f"Firewall setting '{body.setting}' turned {state}",
         target="System Firewall",
         request=request,
     )
     return {"msg": "Firewall setting updated", "setting": body.setting, "enabled": body.enabled}
-
 
 # =============================================================================
 #  POST /rotate-keys  —  Log a key rotation action
@@ -483,14 +462,12 @@ async def toggle_firewall(
 async def rotate_keys(request: Request, authorization: str = Header(None)):
     """Mirrors: adminController.rotateKeys"""
     await _require_admin(authorization)
-
     await _write_audit(
         action="Access keys rotated successfully",
         target="Authentication Service",
         request=request,
     )
     return {"msg": "Keys rotated successfully"}
-
 
 # =============================================================================
 #  DELETE /audit-logs/purge  —  Purge all audit logs
@@ -502,7 +479,6 @@ async def purge_audit_logs(request: Request, authorization: str = Header(None)):
     Mirrors: adminController.purgeLogs
     """
     await _require_admin(authorization)
-
     await audit_col.delete_many({})
     await _write_audit(
         action="Audit logs purged",
@@ -510,7 +486,6 @@ async def purge_audit_logs(request: Request, authorization: str = Header(None)):
         request=request,
     )
     return {"msg": "Audit logs purged successfully"}
-
 
 # =============================================================================
 #  GET /profile  —  Get the admin user document
@@ -522,12 +497,10 @@ async def get_admin_profile(authorization: str = Header(None)):
     Mirrors: User.findOne({ isAdmin: true }).select('-password')
     """
     await _require_admin(authorization)
-
     admin = await users_col.find_one({"isAdmin": True})
     if not admin:
         raise HTTPException(status_code=404, detail="Admin profile not found")
     return _serialize_user(admin)
-
 
 # =============================================================================
 #  PUT /profile  —  Update admin name
@@ -542,16 +515,268 @@ async def update_admin_profile(
     Mirrors: adminController.updateProfile
     """
     await _require_admin(authorization)
-
     admin = await users_col.find_one({"isAdmin": True})
     if not admin:
         raise HTTPException(status_code=404, detail="Admin profile not found")
-
+        
     update_fields: dict = {"updatedAt": datetime.utcnow()}
     if body.name:
         update_fields["name"] = body.name.strip()
-
+        
     await users_col.update_one({"_id": admin["_id"]}, {"$set": update_fields})
-
     updated = await users_col.find_one({"_id": admin["_id"]})
     return _serialize_user(updated)
+
+# =============================================================================
+#  Support Tickets Administration Routes
+# =============================================================================
+class SupportStatusUpdateRequest(BaseModel):
+    status: str
+
+class SupportReplyRequest(BaseModel):
+    text: str
+
+@support_router.get("/admin")
+async def get_support_tickets_admin(authorization: str = Header(None)):
+    """
+    Returns all support tickets sorted by createdAt descending.
+    Populates user profile information using aggregation lookup.
+    """
+    await _require_admin(authorization)
+    pipeline = [
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "user",
+                "foreignField": "_id",
+                "as": "user_docs"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$user_docs",
+                "preserveNullAndEmptyArrays": True
+            }
+        },
+        {
+            "$sort": {"createdAt": -1}
+        }
+    ]
+    cursor = support_col.aggregate(pipeline)
+    tickets = []
+    async for doc in cursor:
+        user_info = None
+        if "user_docs" in doc and doc["user_docs"]:
+            user_doc = doc["user_docs"]
+            user_info = {
+                "_id":            str(user_doc["_id"]),
+                "name":           user_doc.get("name", "Anonymous"),
+                "email":          user_doc.get("email", "N/A"),
+                "profilePicture": user_doc.get("profilePicture", ""),
+            }
+        tickets.append({
+            "_id":      str(doc["_id"]),
+            "user":     user_info,
+            "message":  doc.get("message"),
+            "status":   doc.get("status", "pending"),
+            "priority": doc.get("priority", "Medium"),
+            "history": [
+                {
+                    "sender": item.get("sender"),
+                    "text":   item.get("text"),
+                    "time":   item["time"].isoformat() if isinstance(item.get("time"), datetime) else item.get("time")
+                }
+                for item in doc.get("history", [])
+            ],
+            "createdAt": doc["createdAt"].isoformat() if isinstance(doc.get("createdAt"), datetime) else doc.get("createdAt"),
+            "updatedAt": doc["updatedAt"].isoformat() if isinstance(doc.get("updatedAt"), datetime) else doc.get("updatedAt"),
+        })
+    return tickets
+
+@support_router.put("/admin/{ticket_id}/status")
+async def update_ticket_status(
+    ticket_id: str,
+    body: SupportStatusUpdateRequest,
+    request: Request,
+    authorization: str = Header(None),
+):
+    """
+    Updates the status of a specific support ticket.
+    """
+    await _require_admin(authorization)
+    try:
+        oid = ObjectId(ticket_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid ticket ID")
+        
+    ticket = await support_col.find_one({"_id": oid})
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+        
+    new_status = body.status.lower()
+    await support_col.update_one(
+        {"_id": oid},
+        {"$set": {"status": new_status, "updatedAt": datetime.utcnow()}}
+    )
+    
+    # Log this action
+    if new_status == "resolved":
+        await _write_audit(
+            action=f"Support ticket #{ticket_id[-6:].upper()} resolved",
+            target="Support Center",
+            request=request
+        )
+    else:
+        await _write_audit(
+            action=f"Support ticket #{ticket_id[-6:].upper()} status changed to {new_status}",
+            target="Support Center",
+            request=request
+        )
+        
+    # Resolve fully populated ticket response to prevent frontend state anomalies
+    pipeline = [
+        {"$match": {"_id": oid}},
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "user",
+                "foreignField": "_id",
+                "as": "user_docs"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$user_docs",
+                "preserveNullAndEmptyArrays": True
+            }
+        }
+    ]
+        
+    updated_cursor = support_col.aggregate(pipeline)
+    updated_doc = None
+    async for doc in updated_cursor:
+        updated_doc = doc
+        break
+        
+    if not updated_doc:
+        raise HTTPException(status_code=500, detail="Error fetching updated ticket")
+        
+    user_info = None
+    if "user_docs" in updated_doc and updated_doc["user_docs"]:
+        user_doc = updated_doc["user_docs"]
+        user_info = {
+            "_id":            str(user_doc["_id"]),
+            "name":           user_doc.get("name", "Anonymous"),
+            "email":          user_doc.get("email", "N/A"),
+            "profilePicture": user_doc.get("profilePicture", ""),
+        }
+        
+    return {
+        "_id":      str(updated_doc["_id"]),
+        "user":     user_info,        "message":  updated_doc.get("message"),
+        "status":   updated_doc.get("status", "pending"),
+        "priority": updated_doc.get("priority", "Medium"),
+        "history": [
+            {
+                "sender": item.get("sender"),
+                "text":   item.get("text"),
+                "time":   item["time"].isoformat() if isinstance(item.get("time"), datetime) else item.get("time")
+            }
+            for item in updated_doc.get("history", [])
+        ],
+        "createdAt": updated_doc["createdAt"].isoformat() if isinstance(updated_doc.get("createdAt"), datetime) else updated_doc.get("createdAt"),
+        "updatedAt": updated_doc["updatedAt"].isoformat() if isinstance(updated_doc.get("updatedAt"), datetime) else updated_doc.get("updatedAt"),
+    }
+
+@support_router.post("/admin/{ticket_id}/reply")
+async def reply_to_ticket(
+    ticket_id: str,
+    body: SupportReplyRequest,
+    authorization: str = Header(None),
+):
+    """
+    Appends an administrator reply to a support ticket chat history.
+    """
+    await _require_admin(authorization)
+    try:
+        oid = ObjectId(ticket_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid ticket ID")
+        
+    ticket = await support_col.find_one({"_id": oid})
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+        
+    new_message = {
+        "sender": "admin",
+        "text":   body.text,
+        "time":   datetime.utcnow()
+    }
+    
+    await support_col.update_one(
+        {"_id": oid},
+        {
+            "$push": {"history": new_message},
+            "$set": {"updatedAt": datetime.utcnow()}
+        }
+    )
+    
+    # Resolve fully populated ticket response to prevent frontend state anomalies
+    pipeline = [
+        {"$match": {"_id": oid}},
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "user",
+                "foreignField": "_id",
+                "as": "user_docs"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$user_docs",
+                "preserveNullAndEmptyArrays": True
+            }
+        }
+    ]
+        
+    updated_cursor = support_col.aggregate(pipeline)
+    updated_doc = None
+    async for doc in updated_cursor:
+        updated_doc = doc
+        break
+        
+    if not updated_doc:
+        raise HTTPException(status_code=500, detail="Error fetching updated ticket")
+        
+    user_info = None
+    if "user_docs" in updated_doc and updated_doc["user_docs"]:
+        u_doc = updated_doc["user_docs"]
+        user_info = {
+            "_id":            str(u_doc["_id"]),
+            "name":           u_doc.get("name", "Anonymous"),
+            "email":          u_doc.get("email", "N/A"),
+            "profilePicture": u_doc.get("profilePicture", ""),
+        }
+        
+    # Log push notification event (in production, we can integrate native FCM/Expo push)
+    if user_info and "expoPushToken" in updated_doc["user_docs"] and updated_doc["user_docs"]["expoPushToken"]:
+        print(f"📡 Sending push notification to {user_info['name']} via Expo: {body.text}")
+        
+    return {
+        "_id":      str(updated_doc["_id"]),
+        "user":     user_info,
+        "message":  updated_doc.get("message"),
+        "status":   updated_doc.get("status", "pending"),
+        "priority": updated_doc.get("priority", "Medium"),
+        "history": [
+            {
+                "sender": item.get("sender"),
+                "text":   item.get("text"),
+                "time":   item["time"].isoformat() if isinstance(item.get("time"), datetime) else item.get("time")
+            }
+            for item in updated_doc.get("history", [])
+        ],
+        "createdAt": updated_doc["createdAt"].isoformat() if isinstance(updated_doc.get("createdAt"), datetime) else updated_doc.get("createdAt"),
+        "updatedAt": updated_doc["updatedAt"].isoformat() if isinstance(updated_doc.get("updatedAt"), datetime) else updated_doc.get("updatedAt"),
+    }
