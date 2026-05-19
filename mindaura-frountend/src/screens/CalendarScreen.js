@@ -7,6 +7,7 @@ import { LineChart } from 'react-native-chart-kit';
 import { UserContext } from '../context/UserContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -63,7 +64,7 @@ export default function CalendarScreen() {
             if (!token) return;
 
             const response = await axios.get(
-                'https://mindaura-wfut.onrender.com/api/emotion/history',
+                API_ENDPOINTS.EMOTION.HISTORY,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
