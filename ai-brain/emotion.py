@@ -125,7 +125,7 @@ async def save_mood(
 async def get_mood_history(authorization: str = Header(None)):
     user = await _get_current_user(authorization)
 
-    cursor = mood_collection.find({"user": user["_id"]}).sort("date", -1)
+    cursor = mood_collection.find({"user": user["_id"], "clearedByUser": {"$ne": True}}).sort("date", -1)
     entries = []
     async for doc in cursor:
         entries.append({

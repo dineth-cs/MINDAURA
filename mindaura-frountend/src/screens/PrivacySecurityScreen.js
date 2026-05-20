@@ -9,7 +9,8 @@ import {
     Alert,
     Linking,
     ActivityIndicator,
-    Modal
+    Modal,
+    DeviceEventEmitter
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,7 +54,6 @@ export default function PrivacySecurityScreen() {
     const toggleAppLock = async (value) => {
         try {
             if (value) {
-                // If turning ON, verify first
                 const hasHardware = await LocalAuthentication.hasHardwareAsync();
                 const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
@@ -76,7 +76,6 @@ export default function PrivacySecurityScreen() {
                     Alert.alert('Success', 'App Lock enabled successfully.');
                 }
             } else {
-                // If turning OFF, verify first
                 const result = await LocalAuthentication.authenticateAsync({
                     promptMessage: 'Confirm to disable App Lock',
                 });
@@ -106,9 +105,11 @@ export default function PrivacySecurityScreen() {
                         setIsClearing(true);
                         try {
                             const token = await AsyncStorage.getItem('userToken');
-                            await axios.delete(`${API_URL}/api/v1/users/clear-data`, {
+                            await axios.put(`${API_URL}/api/v1/auth/clear-data`, {}, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
+                            
+                            DeviceEventEmitter.emit('MoodUpdated');
                             
                             Alert.alert(
                                 'Success',
@@ -140,13 +141,37 @@ export default function PrivacySecurityScreen() {
                         setIsDeleting(true);
                         try {
                             const token = await AsyncStorage.getItem('userToken');
-                            await axios.delete(`${API_URL}/api/v1/users/delete-account`, {
+                            
+                            // 1. Delete from Backend
+                            await axios.delete(`${API_URL}/api/v1/auth/delete-account`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
                             
-                            Alert.alert('Success', 'Your account has been deleted.');
+                            // 2. Clear Local Storage
                             await AsyncStorage.removeItem('userToken');
-                            signOut();
+                            
+                            // 3. Show Success & Force Navigate to Start
+                            Alert.alert(
+                                'Success',
+                                'Your account has been permanently deleted.',
+                                [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => {
+                                            if (typeof signOut === 'function') {
+                                                signOut(); // If AuthContext handles logout
+                                            } else {
+                                                navigation.reset({
+                                                    index: 0,
+                                                    routes: [{ name: 'Login' }] // Change 'Login' to your actual start screen name if different
+                                                });
+                                            }
+                                        }
+                                    }
+                                ],
+                                { cancelable: false }
+                            );
+
                         } catch (error) {
                             console.error('Failed to delete account:', error);
                             Alert.alert('Error', error.response?.data?.message || 'Something went wrong while deleting your account.');

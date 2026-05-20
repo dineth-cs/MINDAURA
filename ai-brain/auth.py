@@ -318,3 +318,49 @@ async def resend_otp(request: ForgotPasswordRequest, background_tasks: Backgroun
     background_tasks.add_task(send_otp_email_sync, request.email, user_name, otp)
 
     return {"message": "New OTP sent to email successfully"}
+
+
+@auth_router.put("/clear-data")
+async def clear_data(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("userId")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+            
+        await db["moodentries"].update_many(
+            {"user": ObjectId(user_id)},
+            {"$set": {"clearedByUser": True}}
+        )
+        return {"message": "All your mood history has been cleared successfully."}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@auth_router.delete("/delete-account")
+async def delete_account(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("userId")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+            
+        # Cascading Hard Delete (Mood entries සහ User එකවර මකා දැමීම)
+        await db["moodentries"].delete_many({"user": ObjectId(user_id)})
+        await users_collection.delete_one({"_id": ObjectId(user_id)})
+        
+        return {"message": "Account and all associated data deleted successfully"}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
