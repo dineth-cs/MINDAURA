@@ -21,6 +21,10 @@ const MoodEntrySchema = new mongoose.Schema(
             type: Date,
             default: Date.now,
         },
+        clearedByUser: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );

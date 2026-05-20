@@ -1,8 +1,6 @@
 import os
 import random
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import httpx  # අලුත් ඊමේල් ක්‍රමයට ඕනේ කරන ලයිබ්‍රරි එක
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -12,6 +10,7 @@ import bcrypt  # CRITICAL: Native bcrypt used here (No passlib)
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 import jwt
+from bson import ObjectId
 
 # Load environment variables
 load_dotenv()
@@ -40,9 +39,7 @@ except Exception:
 db = client[db_name]
 users_collection = db["users"]
 
-# Email settings
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
+# JWT Secret
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-key-replace-me")
 
 # --- Pydantic Models ---
@@ -68,49 +65,48 @@ class RegisterRequest(BaseModel):
     password: str
 
 
-# --- Helper Function: Send Email ---
+# --- Helper Function: Send Email via Google Apps Script ---
 def send_otp_email_sync(to_email: str, user_name: str, otp: str):
-    if not EMAIL_USER or not EMAIL_PASS:
-        print("Warning: EMAIL_USER or EMAIL_PASS not set. Cannot send OTP.")
+    script_url = os.getenv("EMAIL_SCRIPT_URL")
+    
+    if not script_url:
+        print("Warning: EMAIL_SCRIPT_URL is not set. Cannot send OTP.")
         return
 
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = f'"MindAura" <{EMAIL_USER}>'
-        msg['To'] = to_email
-        msg['Subject'] = '🔐 Your MindAura Password Reset OTP'
-
-        html_content = f"""
-        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E5E7EB">
-            <div style="background:linear-gradient(135deg,#6B8EFE,#A78BFA);padding:32px 24px;text-align:center">
-                <p style="font-size:32px;margin:0 0 8px">🧠</p>
-                <h1 style="color:#ffffff;font-size:22px;font-weight:800;margin:0">MindAura</h1>
-                <p style="color:rgba(255,255,255,0.85);font-size:13px;margin:4px 0 0">Your Mental Wellness Companion</p>
-            </div>
-            <div style="padding:32px 24px">
-                <h2 style="color:#1F2937;font-size:18px;font-weight:700;margin:0 0 8px">Password Reset Request</h2>
-                <p style="color:#6B7280;font-size:14px;line-height:1.6;margin:0 0 24px">Hi <strong>{user_name}</strong>, we received a request to reset your MindAura password. Use the OTP below to continue. It expires in <strong>5 minutes</strong>.</p>
-                <div style="background:#F0F4FF;border:2px dashed #6B8EFE;border-radius:12px;padding:20px;text-align:center;margin-bottom:24px">
-                    <p style="color:#6B7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px">Your One-Time Password</p>
-                    <p style="color:#6B8EFE;font-size:40px;font-weight:800;letter-spacing:10px;margin:0">{otp}</p>
-                </div>
-                <p style="color:#9CA3AF;font-size:12px;text-align:center;margin:0">If you did not request this, you can safely ignore this email. Your password will not change.</p>
-            </div>
-            <div style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:16px 24px;text-align:center">
-                <p style="color:#9CA3AF;font-size:11px;margin:0">© {datetime.now().year} MindAura · All rights reserved</p>
-            </div>
+    html_content = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E5E7EB">
+        <div style="background:linear-gradient(135deg,#6B8EFE,#A78BFA);padding:32px 24px;text-align:center">
+            <p style="font-size:32px;margin:0 0 8px">🧠</p>
+            <h1 style="color:#ffffff;font-size:22px;font-weight:800;margin:0">MindAura</h1>
+            <p style="color:rgba(255,255,255,0.85);font-size:13px;margin:4px 0 0">Your Mental Wellness Companion</p>
         </div>
-        """
-        msg.attach(MIMEText(html_content, 'html'))
+        <div style="padding:32px 24px">
+            <h2 style="color:#1F2937;font-size:18px;font-weight:700;margin:0 0 8px">Password Reset Request</h2>
+            <p style="color:#6B7280;font-size:14px;line-height:1.6;margin:0 0 24px">Hi <strong>{user_name}</strong>, we received a request to reset your MindAura password. Use the OTP below to continue. It expires in <strong>5 minutes</strong>.</p>
+            <div style="background:#F0F4FF;border:2px dashed #6B8EFE;border-radius:12px;padding:20px;text-align:center;margin-bottom:24px">
+                <p style="color:#6B7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px">Your One-Time Password</p>
+                <p style="color:#6B8EFE;font-size:40px;font-weight:800;letter-spacing:10px;margin:0">{otp}</p>
+            </div>
+            <p style="color:#9CA3AF;font-size:12px;text-align:center;margin:0">If you did not request this, you can safely ignore this email. Your password will not change.</p>
+        </div>
+        <div style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:16px 24px;text-align:center">
+            <p style="color:#9CA3AF;font-size:11px;margin:0">© {datetime.now().year} MindAura · All rights reserved</p>
+        </div>
+    </div>
+    """
 
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.send_message(msg)
-        server.quit()
-        print(f"Successfully sent OTP to {to_email}")
+    payload = {
+        "to": to_email,
+        "subject": "🔐 Your MindAura Password Reset OTP",
+        "body": html_content
+    }
+
+    try:
+        # HTTPS (Port 443) හරහා යවන නිසා Hugging Face බ්ලොක් කරන්නේ නැහැ
+        response = httpx.post(script_url, json=payload, timeout=15.0)
+        print(f"✅ OTP successfully sent via Apps Script: {response.text}")
     except Exception as e:
-        print(f"Failed to send email to {to_email}: {e}")
+        print(f"❌ Failed to send OTP email: {e}")
 
 
 # --- Endpoints ---
@@ -127,7 +123,6 @@ async def get_me(authorization: str = Header(None)):
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
             
-        from bson import ObjectId
         user = await users_collection.find_one({"_id": ObjectId(user_id)})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
@@ -204,11 +199,9 @@ async def login(request: LoginRequest):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid Credentials")
 
-    # The AI's Fix: Check if account is suspended
     if user.get("status", "ACTIVE") == "SUSPENDED":
         raise HTTPException(status_code=403, detail="Your account has been suspended...")
 
-    # Our Fix: Native bcrypt verification (Handles Node.js $2b$ and $2a$ prefixes perfectly)
     try:
         is_match = bcrypt.checkpw(request.password.encode('utf-8'), user["password"].encode('utf-8'))
     except Exception:
@@ -290,7 +283,6 @@ async def reset_password(request: ResetPasswordRequest):
     if stored_otp != request.otp or datetime.utcnow() > expire_time:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
-    # Native bcrypt hashing for new password
     salt = bcrypt.gensalt()
     hashed_password = bcrypt.hashpw(request.newPassword.encode('utf-8'), salt).decode('utf-8')
 
@@ -303,3 +295,26 @@ async def reset_password(request: ResetPasswordRequest):
     )
 
     return {"message": "Password reset successfully"}
+
+
+@auth_router.post("/resend-otp")
+async def resend_otp(request: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    user = await users_collection.find_one({"email": request.email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # අලුත් OTP කෝඩ් එකක් හදනවා
+    otp = str(random.randint(100000, 999999))
+    expire_time = datetime.utcnow() + timedelta(minutes=5)
+
+    # ඒක ඩේටාබේස් එකට අප්ඩේට් කරනවා
+    await users_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"resetPasswordOtp": otp, "resetPasswordExpire": expire_time}}
+    )
+
+    # Google Apps Script හරහා අලුත් කෝඩ් එක ඊමේල් කරනවා
+    user_name = user.get("name", "User")
+    background_tasks.add_task(send_otp_email_sync, request.email, user_name, otp)
+
+    return {"message": "New OTP sent to email successfully"}

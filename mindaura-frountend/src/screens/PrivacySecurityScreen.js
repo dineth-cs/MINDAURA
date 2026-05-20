@@ -8,7 +8,8 @@ import {
     Switch,
     Alert,
     Linking,
-    ActivityIndicator
+    ActivityIndicator,
+    Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +27,8 @@ export default function PrivacySecurityScreen() {
     const { signOut } = useContext(AuthContext);
     const [isAppLockEnabled, setIsAppLockEnabled] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isPrivacyModalVisible, setPrivacyModalVisible] = useState(false);
 
     const bgColor = isDarkMode ? '#121212' : '#FFFFFF';
     const textColor = isDarkMode ? '#FFFFFF' : '#111827';
@@ -93,7 +96,7 @@ export default function PrivacySecurityScreen() {
     const handleClearData = () => {
         Alert.alert(
             'Clear All My Data',
-            'This will permanently delete all your mood history, journal entries, and support tickets from our servers. This cannot be undone.',
+            'Are you sure you want to delete all your mood history?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -103,13 +106,13 @@ export default function PrivacySecurityScreen() {
                         setIsClearing(true);
                         try {
                             const token = await AsyncStorage.getItem('userToken');
-                            await axios.delete(`${API_URL}/api/auth/clear-data`, {
+                            await axios.delete(`${API_URL}/api/v1/users/clear-data`, {
                                 headers: { Authorization: `Bearer ${token}` }
                             });
                             
                             Alert.alert(
-                                'Data Cleared',
-                                'All your personal data has been permanently removed from our servers.',
+                                'Success',
+                                'All your mood history has been successfully deleted.',
                                 [{ text: 'OK' }]
                             );
                         } catch (error) {
@@ -124,15 +127,39 @@ export default function PrivacySecurityScreen() {
         );
     };
 
+    const handleDeleteAccount = () => {
+        Alert.alert(
+            'Delete Account',
+            'Danger Zone: This action is irreversible. Delete account?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete Account',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setIsDeleting(true);
+                        try {
+                            const token = await AsyncStorage.getItem('userToken');
+                            await axios.delete(`${API_URL}/api/v1/users/delete-account`, {
+                                headers: { Authorization: `Bearer ${token}` }
+                            });
+                            
+                            Alert.alert('Success', 'Your account has been deleted.');
+                            await AsyncStorage.removeItem('userToken');
+                            signOut();
+                        } catch (error) {
+                            console.error('Failed to delete account:', error);
+                            Alert.alert('Error', error.response?.data?.message || 'Something went wrong while deleting your account.');
+                            setIsDeleting(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handlePrivacyPolicy = () => {
-        const url = 'https://mindaura-wfut.onrender.com/privacy';
-        Linking.canOpenURL(url).then(supported => {
-            if (supported) {
-                Linking.openURL(url);
-            } else {
-                Linking.openURL('https://www.privacypolicygenerator.info/');
-            }
-        }).catch(err => console.error('Failed to open privacy policy:', err));
+        setPrivacyModalVisible(true);
     };
 
     return (
@@ -209,7 +236,7 @@ export default function PrivacySecurityScreen() {
                         style={styles.clearDataButton}
                         onPress={handleClearData}
                         activeOpacity={0.8}
-                        disabled={isClearing}
+                        disabled={isClearing || isDeleting}
                     >
                         {isClearing ? (
                             <ActivityIndicator color="#FF3B30" />
@@ -218,11 +245,73 @@ export default function PrivacySecurityScreen() {
                         )}
                     </TouchableOpacity>
                     <Text style={styles.warningText}>
-                        This will permanently delete all your mood history and journal entries.
+                        This will permanently delete all your mood history.
+                    </Text>
+
+                    <TouchableOpacity
+                        style={[styles.clearDataButton, { marginTop: 16 }]}
+                        onPress={handleDeleteAccount}
+                        activeOpacity={0.8}
+                        disabled={isClearing || isDeleting}
+                    >
+                        {isDeleting ? (
+                            <ActivityIndicator color="#FF3B30" />
+                        ) : (
+                            <Text style={styles.clearDataButtonText}>Delete Account</Text>
+                        )}
+                    </TouchableOpacity>
+                    <Text style={styles.warningText}>
+                        Danger Zone: This action is irreversible.
                     </Text>
                 </View>
 
             </ScrollView>
+
+            {/* Privacy Policy Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={isPrivacyModalVisible}
+                onRequestClose={() => setPrivacyModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: bgColor, borderColor: borderColor }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: textColor }]}>Privacy Policy</Text>
+                            <TouchableOpacity onPress={() => setPrivacyModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={textColor} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView contentContainerStyle={styles.modalScroll}>
+                            <Text style={[styles.modalText, { color: textColor }]}>
+                                Welcome to MindAura's Privacy Policy. Your trust is our top priority, and we are committed to protecting your personal and mental health data.
+                            </Text>
+                            
+                            <Text style={[styles.modalSubtitle, { color: textColor }]}>1. Process-and-Discard Architecture</Text>
+                            <Text style={[styles.modalText, { color: subTextColor }]}>
+                                We utilize a strict "process-and-discard" architecture for Face and Voice data analysis. Your raw biometric data (images and audio) is never saved on our servers. Once processed to generate an emotion label, the raw files are immediately deleted permanently.
+                            </Text>
+
+                            <Text style={[styles.modalSubtitle, { color: textColor }]}>2. AES-256 Encryption for Journals</Text>
+                            <Text style={[styles.modalText, { color: subTextColor }]}>
+                                All your journal text entries are encrypted using industry-standard AES-256 encryption. This ensures your private thoughts are strictly confidential and unreadable by any unauthorized parties.
+                            </Text>
+
+                            <Text style={[styles.modalSubtitle, { color: textColor }]}>3. Zero Data Selling Policy</Text>
+                            <Text style={[styles.modalText, { color: subTextColor }]}>
+                                MindAura explicitly ensures that your data is never sold to third parties under any circumstances. We do not monetize your personal information or mental health history.
+                            </Text>
+                            
+                        </ScrollView>
+                        <TouchableOpacity
+                            style={styles.modalCloseButton}
+                            onPress={() => setPrivacyModalVisible(false)}
+                        >
+                            <Text style={styles.modalCloseButtonText}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -367,5 +456,54 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 20,
         paddingHorizontal: 16,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        maxHeight: '80%',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+    },
+    modalScroll: {
+        paddingBottom: 24,
+    },
+    modalSubtitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    modalText: {
+        fontSize: 14,
+        lineHeight: 22,
+    },
+    modalCloseButton: {
+        backgroundColor: '#6B8EFE',
+        paddingVertical: 14,
+        borderRadius: 16,
+        alignItems: 'center',
+        marginTop: 16,
+    },
+    modalCloseButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });

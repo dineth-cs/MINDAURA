@@ -97,7 +97,7 @@ router.post('/save', protect, async (req, res) => {
 // GET /api/emotion/history  – fetch all mood entries for the logged-in user (newest first)
 router.get('/history', protect, async (req, res) => {
     try {
-        const entries = await MoodEntry.find({ user: req.user._id })
+        const entries = await MoodEntry.find({ user: req.user._id, clearedByUser: { $ne: true } })
             .sort({ date: -1 })
             .lean();
 

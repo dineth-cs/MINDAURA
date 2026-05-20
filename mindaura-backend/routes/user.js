@@ -1,29 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
-const MoodEntry = require('../models/MoodEntry');
-const SupportTicket = require('../models/SupportTicket');
-const Journal = require('../models/Journal');
+const { clearUserData, deleteUserAccount } = require('../controllers/userController');
 
-// @desc    Clear all user data (Moods, Journals, Support Tickets)
-// @route   DELETE /api/users/clear-data
+// @desc    Clear all mood history
+// @route   DELETE /api/v1/users/clear-data
 // @access  Private
-router.delete('/clear-data', protect, async (req, res) => {
-    try {
-        const userId = req.user._id;
+router.delete('/clear-data', protect, clearUserData);
 
-        // Strictly delete only associated data, not the user account
-        await Promise.all([
-            MoodEntry.deleteMany({ user: userId }),
-            Journal.deleteMany({ user: userId }),
-            SupportTicket.deleteMany({ user: userId }),
-        ]);
-
-        res.status(200).json({ message: "All your personal data has been cleared successfully." });
-    } catch (error) {
-        console.error("Clear data error:", error);
-        res.status(500).json({ message: "Server error while clearing data." });
-    }
-});
+// @desc    Delete user account and all associated data
+// @route   DELETE /api/v1/users/delete-account
+// @access  Private
+router.delete('/delete-account', protect, deleteUserAccount);
 
 module.exports = router;

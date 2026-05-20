@@ -5,7 +5,7 @@
 import os
 from datetime import datetime
 from urllib.parse import urlparse
-from typing import Optional  
+from typing import Optional
 
 import jwt
 from bson import ObjectId
@@ -23,14 +23,12 @@ MONGO_URI  = os.getenv("MONGO_URI", "")
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-key-replace-me")
 
 _client = AsyncIOMotorClient(MONGO_URI)
-
-# 1 "test" DB 
 _db = _client.get_database("test")
 
 mood_collection     = _db["moodentries"]
 users_collection_em = _db["users"]
 
-# Valid values — Angry  Surprise 
+# Valid values
 VALID_MOODS   = {"Happy", "Sad", "Stress", "Anxious", "Energy", "Bored", "Neutral", "Angry", "Surprise"}
 VALID_SOURCES = {"face", "voice", "journal"}
 
@@ -60,7 +58,6 @@ async def _get_current_user(authorization: Optional[str] = None):
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
-    # String  ObjectId 
     try:
         user = await users_collection_em.find_one({"_id": ObjectId(user_id)})
     except:

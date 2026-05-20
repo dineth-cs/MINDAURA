@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Activ
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar } from 'react-native-calendars';
-import { LineChart } from 'react-native-chart-kit';
+import { PieChart } from 'react-native-chart-kit';
 import { UserContext } from '../context/UserContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -44,7 +44,7 @@ function scoreToColor(score) {
 export default function CalendarScreen() {
     const navigation = useNavigation();
     const { isDarkMode, currentTheme } = useContext(UserContext);
-    const [selectedTab, setSelectedTab] = useState('Weekly');
+    const [timeframe, setTimeframe] = useState('Weekly');
     const [moodHistory, setMoodHistory] = useState([]);
     const [markedDates, setMarkedDates] = useState({});
     const [loading, setLoading] = useState(true);
@@ -115,80 +115,56 @@ export default function CalendarScreen() {
         return () => subscription.remove();
     }, [fetchMoodHistory]);
 
-    // --- Build real chart data from moodHistory, fallback to zeros ---
-    const buildChartData = (period) => {
-        const moodScore = (mood) => ({ Happy: 10, Surprise: 8, Neutral: 6, Angry: 4, Sad: 2 }[mood] || 0);
+    // --- Build Mood Distribution Data ---
+    const getDistributionData = (period) => {
+        if (!moodHistory || moodHistory.length === 0) return [];
 
-        if (moodHistory.length === 0) {
-            // Honest empty fallback: all zeros, no fake data
-            if (period === 'Daily') return { labels: ['8AM','12PM','4PM','8PM'], datasets: [{ data: [0,0,0,0], color: (o=1) => `rgba(107,142,254,${o})`, strokeWidth: 2 }], legend: [] };
-            if (period === 'Weekly') return { labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], datasets: [{ data: [0,0,0,0,0,0,0], color: (o=1) => `rgba(107,142,254,${o})`, strokeWidth: 2 }], legend: [] };
-            return { labels: ['Week 1','Week 2','Week 3','Week 4'], datasets: [{ data: [0,0,0,0], color: (o=1) => `rgba(107,142,254,${o})`, strokeWidth: 2 }], legend: [] };
-        }
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        let filteredLogs = [];
 
         if (period === 'Daily') {
-            const todayEntries = moodHistory.filter(e => e.date && e.date.startsWith(today));
-            const slots = ['8AM', '12PM', '4PM', '8PM'];
-
-            // Map each slot to an hour-of-day range:
-            //   8AM  → hours  0 – 10   (midnight to late morning)
-            //  12PM  → hours 11 – 14   (11AM to 2PM)
-            //   4PM  → hours 15 – 18   (3PM to 6PM)
-            //   8PM  → hours 19 – 23   (7PM onwards)
-            const slotRanges = [
-                { min: 0,  max: 10 },   // 8AM slot
-                { min: 11, max: 14 },   // 12PM slot
-                { min: 15, max: 18 },   // 4PM slot
-                { min: 19, max: 23 },   // 8PM slot
-            ];
-
-            const data = slotRanges.map(({ min, max }) => {
-                const slotEntries = todayEntries.filter(e => {
-                    const h = new Date(e.date).getHours();
-                    return h >= min && h <= max;
-                });
-                if (!slotEntries.length) return 0;
-                // Average score if multiple scans happened in the same slot
-                const avg = slotEntries.reduce((s, e) => s + moodScore(e.mood), 0) / slotEntries.length;
-                return Math.round(avg);
-            });
-
-            // Line color is neutral grey — colored dots will pop against it
-            return { labels: slots, datasets: [{ data, color: (o=1) => `rgba(160,160,180,${o * 0.6})`, strokeWidth: 2 }], legend: [] };
-        }
-
-        if (period === 'Weekly') {
-            const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-            const now = new Date();
-            const weekStart = new Date(now);
-            weekStart.setDate(now.getDate() - now.getDay() + 1);
-            const data = days.map((_, i) => {
-                const day = new Date(weekStart);
-                day.setDate(weekStart.getDate() + i);
-                const dateStr = day.toISOString().split('T')[0];
-                const dayEntries = moodHistory.filter(e => e.date && e.date.startsWith(dateStr));
-                if (!dayEntries.length) return 0;
-                return Math.round(dayEntries.reduce((s, e) => s + moodScore(e.mood), 0) / dayEntries.length);
-            });
-            return { labels: days, datasets: [{ data, color: (o=1) => `rgba(160,160,180,${o * 0.6})`, strokeWidth: 2 }], legend: [] };
-        }
-
-        // Monthly: average per week
-        const labels = ['Week 1','Week 2','Week 3','Week 4'];
-        const now = new Date();
-        const data = labels.map((_, i) => {
-            const weekStart = new Date(now.getFullYear(), now.getMonth(), 1 + i * 7);
-            const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekStart.getDate() + 6);
-            const entries = moodHistory.filter(e => {
+            filteredLogs = moodHistory.filter(e => {
                 if (!e.date) return false;
                 const d = new Date(e.date);
-                return d >= weekStart && d <= weekEnd;
+                return d >= startOfToday;
             });
-            if (!entries.length) return 0;
-            return parseFloat((entries.reduce((s, e) => s + moodScore(e.mood), 0) / entries.length).toFixed(1));
+        } else if (period === 'Weekly') {
+            const sevenDaysAgo = new Date(startOfToday);
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            filteredLogs = moodHistory.filter(e => {
+                if (!e.date) return false;
+                const d = new Date(e.date);
+                return d >= sevenDaysAgo;
+            });
+        } else if (period === 'Monthly') {
+            const thirtyDaysAgo = new Date(startOfToday);
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            filteredLogs = moodHistory.filter(e => {
+                if (!e.date) return false;
+                const d = new Date(e.date);
+                return d >= thirtyDaysAgo;
+            });
+        }
+
+        if (filteredLogs.length === 0) return [];
+
+        // Count occurrences
+        const counts = {};
+        filteredLogs.forEach(log => {
+            const m = log.mood;
+            counts[m] = (counts[m] || 0) + 1;
         });
-        return { labels, datasets: [{ data, color: (o=1) => `rgba(160,160,180,${o * 0.6})`, strokeWidth: 2 }], legend: [] };
+
+        // Convert to PieChart format
+        return Object.keys(counts).map(mood => ({
+            name: mood,
+            population: counts[mood],
+            color: MOOD_COLORS[mood] || '#999999',
+            legendFontColor: isDarkMode ? '#FFFFFF' : '#333333',
+            legendFontSize: 13
+        }));
     };
 
     const getOverallMoodText = () => {
@@ -309,7 +285,7 @@ export default function CalendarScreen() {
                 {/* Tab Selector */}
                 <View style={styles.tabContainer}>
                     {['Daily', 'Weekly', 'Monthly'].map((tab) => {
-                        const isActive = selectedTab === tab;
+                        const isActive = timeframe === tab;
                         return (
                             <TouchableOpacity
                                 key={tab}
@@ -318,7 +294,7 @@ export default function CalendarScreen() {
                                     isActive && styles.activeTabButton,
                                     isActive && { backgroundColor: isDarkMode ? 'rgba(107, 142, 254, 0.3)' : '#F3E5F5' }
                                 ]}
-                                onPress={() => setSelectedTab(tab)}
+                                onPress={() => setTimeframe(tab)}
                             >
                                 <Text style={[
                                     styles.tabText,
@@ -335,42 +311,30 @@ export default function CalendarScreen() {
                     <Text style={[styles.overallMoodTitle, { color: currentTheme.text }]}>
                         {getOverallMoodText()}
                     </Text>
-                    <LineChart
-                        data={(() => {
-                            const data = buildChartData(selectedTab);
-                            return {
-                                ...data,
-                                datasets: [
-                                    ...data.datasets,
-                                    { data: [10], withDots: false, color: () => 'rgba(0,0,0,0)' }
-                                ]
-                            };
-                        })()}
-                        width={screenWidth - 60}
-                        height={220}
-                        fromZero={true}
-                        segments={5}
-                        formatYLabel={(value) => {
-                            const val = parseInt(value);
-                            if (val === 10) return '😄';
-                            if (val === 8) return '😲';
-                            if (val === 6) return '😐';
-                            if (val === 4) return '😡';
-                            if (val === 2) return '😢';
-                            return '';
-                        }}
-                        chartConfig={chartConfig}
-                        getDotColor={(dataPoint) => scoreToColor(dataPoint)}
-                        bezier
-                        style={styles.chartStyle}
-                        withVerticalLines={false}
-                        withHorizontalLines={true}
-                    />
-                    {moodHistory.length === 0 && (
-                        <Text style={{ color: currentTheme.subText, fontSize: 11, textAlign: 'center', marginTop: 8, paddingHorizontal: 16 }}>
-                            Chart will populate once mood entries are recorded.
-                        </Text>
-                    )}
+                    {(() => {
+                        const pieData = getDistributionData(timeframe);
+                        if (pieData.length === 0) {
+                            return (
+                                <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
+                                    <Text style={{ color: currentTheme.subText, fontSize: 13, textAlign: 'center', paddingHorizontal: 16 }}>
+                                        No mood entries recorded for this {timeframe.toLowerCase()} period.
+                                    </Text>
+                                </View>
+                            );
+                        }
+                        return (
+                            <PieChart
+                                data={pieData}
+                                width={screenWidth - 60}
+                                height={220}
+                                chartConfig={chartConfig}
+                                accessor="population"
+                                backgroundColor="transparent"
+                                paddingLeft="15"
+                                absolute
+                            />
+                        );
+                    })()}
                 </View>
 
 

@@ -535,131 +535,63 @@ async def delete_user(user_id: str, request: Request, authorization: str = Heade
 # =============================================================================
 
 @admin_router.get("/analytics/user-growth")
-
 async def get_user_growth(authorization: str = Header(None)):
-
     """
-
     Asynchronously aggregates the users collection based on the createdAt field
-
     to retrieve real live user registration statistics (daily, weekly, monthly, yearly).
-
     """
-
     await _require_admin(authorization)
-
     
-
     now = datetime.utcnow()
-
     
-
     # 1. Daily: Last 7 days registration counts
-
     daily = []
-
     for i in range(6, -1, -1):
-
         day_start = datetime(now.year, now.month, now.day) - timedelta(days=i)
-
         day_end = day_start + timedelta(days=1)
-
         count = await users_col.count_documents({"createdAt": {"$gte": day_start, "$lt": day_end}})
-
         weekday_name = day_start.strftime("%a")  # e.g., "Mon", "Tue"
-
         daily.append({"name": weekday_name, "users": count})
-
         
-
-    # 2. Weekly: Group by week of the current month (standard 4 weeks)
-
+    # 2. Weekly: Current month split into 4 weeks
     weekly = []
-
     for w in range(4):
-
         start_day = w * 7 + 1
-
+        # Handle month end
         if w == 3:
-
-            if now.month == 12:
-
-                next_month = datetime(now.year + 1, 1, 1)
-
-            else:
-
-                next_month = datetime(now.year, now.month + 1, 1)
-
+            next_month = datetime(now.year, now.month + 1, 1) if now.month < 12 else datetime(now.year + 1, 1, 1)
             end_date = next_month
-
         else:
-
             end_date = datetime(now.year, now.month, start_day + 7)
-
             
-
         start_date = datetime(now.year, now.month, start_day)
-
         count = await users_col.count_documents({"createdAt": {"$gte": start_date, "$lt": end_date}})
-
         weekly.append({"name": f"Week {w+1}", "users": count})
-
         
-
     # 3. Monthly: Registrations per month for the current year
-
     months_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
     monthly = []
-
     for m in range(12):
-
         start_date = datetime(now.year, m + 1, 1)
-
-        if m == 11:
-
-            end_date = datetime(now.year + 1, 1, 1)
-
-        else:
-
-            end_date = datetime(now.year, m + 2, 1)
-
+        end_date = datetime(now.year, m + 2, 1) if m < 11 else datetime(now.year + 1, 1, 1)
             
-
         count = await users_col.count_documents({"createdAt": {"$gte": start_date, "$lt": end_date}})
-
         monthly.append({"name": months_names[m], "users": count})
-
         
-
     # 4. Yearly: Total registrations per year for the last 4 years
-
     yearly = []
-
     for y in range(now.year - 3, now.year + 1):
-
         start_date = datetime(y, 1, 1)
-
         end_date = datetime(y + 1, 1, 1)
-
         count = await users_col.count_documents({"createdAt": {"$gte": start_date, "$lt": end_date}})
-
         yearly.append({"name": str(y), "users": count})
-
         
-
     return {
-
         "daily": daily,
-
         "weekly": weekly,
-
         "monthly": monthly,
-
         "yearly": yearly,
-
     }
-
 
 
 # =============================================================================
